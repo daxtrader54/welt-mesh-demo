@@ -25,7 +25,12 @@ export type PaymentTokenInput = {
   integrationId?: string | null
   /** Our order id. Comes back on every transfer event as `clientTransactionId`. */
   transactionId: string
-  destination: Destination
+  /**
+   * Every asset the merchant will take, all to the same address. Mesh's own guidance is to offer
+   * all of them so a transfer has more ways to succeed; one entry is the minimum, not the target.
+   * When the shopper has chosen an asset this is that one entry, so Link has nothing to ask.
+   */
+  destinations: Destination[]
   /** Exact asset amount. Mesh rejects `amount` and `amountInFiat` together on a payment. */
   amount: number
   /** Shown as the fiat equivalent in Link. Mesh validates it within 1% of its own pricing. */
@@ -78,15 +83,13 @@ export function buildPaymentTokenBody(input: PaymentTokenInput): LinkTokenBody {
       isInclusiveFeeEnabled: false,
       generatePayLink: false,
       ...(input.clientFee ? { clientFee: clientFeeRatio(input.clientFee, input.amount) } : {}),
-      toAddresses: [
-        {
-          networkId: input.destination.networkId,
-          symbol: input.destination.symbol,
-          address: input.destination.address,
-          amount: input.amount,
-          displayAmountInFiat: input.displayAmountInFiat
-        }
-      ]
+      toAddresses: input.destinations.map(d => ({
+        networkId: d.networkId,
+        symbol: d.symbol,
+        address: d.address,
+        amount: input.amount,
+        displayAmountInFiat: input.displayAmountInFiat
+      }))
     }
   }
   if (input.integrationId) body.integrationId = input.integrationId

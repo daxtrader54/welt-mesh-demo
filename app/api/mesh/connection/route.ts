@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { failure } from '@/lib/failure'
 import { fail, guard, ok, readJson } from '@/lib/http'
 import { maskToken } from '@/lib/format'
-import { ensureSessionId, meshUserId } from '@/lib/session'
+import { ensureSessionId, meshUserId, readSessionId } from '@/lib/session'
 import { getSession, putSession, type Connection } from '@/lib/store/records'
 
 export const runtime = 'nodejs'
@@ -64,6 +64,40 @@ export async function POST(req: Request) {
     await putSession(sid, { ...existing, connections })
 
     // Deliberately thin. The drawer gets enough to prove a token arrived, and no more.
+    return ok({
+      connection: {
+        brokerName: connection.brokerName,
+        brokerType: connection.brokerType,
+        accountName: connection.accountName,
+        tokenId: connection.tokenId,
+        authTokenMasked: maskToken(connection.authToken),
+        expiresAt: connection.expiresAt
+      }
+    })
+  })
+}
+
+/**
+ * Does this session already have an account connected?
+ *
+ * Asked once on load so a returning shopper is offered "Pay with Coinbase, connected" rather than
+ * being walked through a connection they already made. The connection survives a reset by design,
+ * so this is the normal case on a second run rather than an edge one.
+ *
+ * Returns the same thin summary as the POST: enough to name the provider and prove a token is
+ * held, and nothing that could be used as one.
+ */
+export async function GET() {
+  return guard(async () => {
+    const sid = await readSessionId()
+    const session = sid ? await getSession(sid) : null
+    const connection = session?.connections.at(-1)
+
+    if (!connection) return ok({ connection: null })
+
+    const expired = connection.expiresAt !== null && connection.expiresAt < Date.now()
+    if (expired) return ok({ connection: null, expired: true })
+
     return ok({
       connection: {
         brokerName: connection.brokerName,

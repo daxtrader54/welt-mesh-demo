@@ -6,6 +6,7 @@ import {
   holdingsResponse,
   holdingsValueResponse,
   linkTokenResponse,
+  quoteResponse,
   type CryptoPosition
 } from './schemas'
 import {
@@ -173,6 +174,64 @@ export async function getPortfolio(authToken: string, brokerType: string): Promi
       positions: content?.cryptocurrencyPositions ?? [],
       cryptoValue: value.ok ? (value.data.content?.cryptocurrenciesValue ?? null) : null,
       totalValue: value.ok ? (value.data.content?.totalValue ?? null) : null
+    }
+  }
+}
+
+export type AssetQuote = {
+  symbol: string
+  eligible: boolean
+  reason: string | null
+  /** Total fees in fiat, as Mesh quotes them for this asset. */
+  feesInFiat: number | null
+  /**
+   * Where the money would come from. `existingCryptocurrencyBalance` means they already hold it;
+   * `buyingPowerPurchase` and `paymentMethodDepositUsage` mean Mesh would buy it for them, which
+   * is the part a merchant does not expect.
+   */
+  funding: { type: string; method: string | null }[]
+}
+
+/**
+ * Ask Mesh whether one asset can actually pay for this order, and what it would cost.
+ *
+ * Documented as Coinbase-only for `brokerType` at the time of writing, which suits a demo whose
+ * required source is Coinbase, but it is not a general capability yet and the UI says so.
+ */
+export async function getQuote(
+  brokerType: string,
+  symbol: string,
+  amountInFiat: number
+): Promise<MeshCall<AssetQuote>> {
+  const env = meshEnv()
+  const res = await meshPost(
+    '/api/v1/transfers/managed/quote',
+    {
+      amountInFiat,
+      fiatCurrency: 'USD',
+      symbol,
+      networkId: env.merchantNetworkId,
+      toAddress: env.merchantAddress,
+      brokerType
+    },
+    quoteResponse
+  )
+
+  if (!res.ok) return res
+
+  const c = res.data.content
+  return {
+    ok: true,
+    ms: res.ms,
+    data: {
+      symbol,
+      eligible: c?.isEligible ?? false,
+      reason: c?.ineligibilityReason ?? null,
+      feesInFiat: c?.fees?.totalFeesInFiat ?? null,
+      funding: (c?.fundingOptions ?? []).map(f => ({
+        type: f.cryptocurrencyFundingOptionType ?? 'unknown',
+        method: f.paymentMethodType ?? null
+      }))
     }
   }
 }
