@@ -8,6 +8,7 @@ import {
   holdingsValueResponse,
   linkTokenResponse,
   quoteResponse,
+  transfersResponse,
   type CryptoPosition
 } from './schemas'
 import {
@@ -370,5 +371,95 @@ export async function configureTransfer(
         })),
       fundingStatus: c?.transferBalanceFundingAvailability?.status ?? null
     }
+  }
+}
+
+export type MeshTransfer = {
+  id: string | null
+  reference: string | null
+  status: string
+  amount: number | null
+  symbol: string | null
+  amountInFiat: number | null
+  feesInFiat: number | null
+  network: string | null
+  hash: string | null
+  at: number | null
+  from: string | null
+  /** One per leg. `from` differing from `to` is a conversion, stated by Mesh after the fact. */
+  funding: { type: string; from: string | null; to: string | null; fromAmount: number | null }[]
+}
+
+/**
+ * Mesh's own ledger, read with the client credentials rather than a user's token.
+ *
+ * A GET, unlike everything else here, so it does not go through `meshPost`. It answers the
+ * reconciliation question a merchant asks after the demo: how do I see what actually moved, without
+ * trusting a browser that has closed or a webhook I might have missed.
+ */
+export async function listTransfers(count = 25): Promise<MeshCall<{ items: MeshTransfer[]; total: number }>> {
+  const started = Date.now()
+  const env = meshEnv()
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS)
+
+  try {
+    const url = new URL(env.baseUrl + '/api/v1/transfers/managed/mesh')
+    url.searchParams.set('Count', String(count))
+    url.searchParams.set('OrderBy', 'createdTimestamp')
+    url.searchParams.set('DescendingOrder', 'true')
+
+    const res = await fetch(url, {
+      headers: { 'X-Client-Id': env.clientId, 'X-Client-Secret': env.apiKey },
+      signal: controller.signal,
+      cache: 'no-store'
+    })
+    const ms = Date.now() - started
+    const parsed = transfersResponse.safeParse(await res.json().catch(() => null))
+
+    if (!res.ok || !parsed.success) {
+      return {
+        ok: false,
+        ms,
+        status: res.status,
+        error: failure('unknown', { detail: `HTTP ${res.status} from transfers/managed/mesh` })
+      }
+    }
+
+    const c = parsed.data.content
+    return {
+      ok: true,
+      ms,
+      data: {
+        total: c?.total ?? 0,
+        items: (c?.items ?? []).map(t => ({
+          id: t.id ?? null,
+          reference: t.clientTransactionId ?? null,
+          status: t.status ?? 'unknown',
+          amount: t.amount ?? null,
+          symbol: t.symbol ?? null,
+          amountInFiat: t.amountInFiat ?? null,
+          feesInFiat: t.totalFeesAmountInFiat ?? null,
+          network: t.networkName ?? null,
+          hash: t.hash ?? null,
+          at: t.createdTimestamp ? t.createdTimestamp * 1000 : null,
+          from: t.from?.name ?? null,
+          funding: (t.fundingMethods ?? []).map(f => ({
+            type: f.type ?? 'unknown',
+            from: f.fromSymbol ?? null,
+            to: f.toSymbol ?? null,
+            fromAmount: f.fromAmount ?? null
+          }))
+        }))
+      }
+    }
+  } catch (err) {
+    return {
+      ok: false,
+      ms: Date.now() - started,
+      error: failure('network', { detail: err instanceof Error ? err.message : String(err) })
+    }
+  } finally {
+    clearTimeout(timer)
   }
 }

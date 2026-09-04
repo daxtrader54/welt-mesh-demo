@@ -759,9 +759,17 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
               onClick={() => (paid ? void reset() : goto('shop'))}
               className="flex items-baseline gap-5 text-left"
             >
-              <span className="text-xl font-extrabold leading-none tracking-[0.2em] sm:text-2xl">
-                {BRAND}
-              </span>
+              {/* The drawn wordmark, trimmed to its own bounding box by scripts/trim-logo.mjs.
+                  The light variant is drawn on the same warm ground the shop uses, so it needs no
+                  knockout and leaves no seam. */}
+              <Image
+                src="/brand/welt-logo-light-trimmed.png"
+                alt={BRAND}
+                width={405}
+                height={141}
+                priority
+                className="h-5 w-auto sm:h-6"
+              />
               <span className="label hidden sm:inline">
                 {PRODUCT.brand} · {PRODUCT.name}
               </span>
