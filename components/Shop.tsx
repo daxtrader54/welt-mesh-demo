@@ -966,9 +966,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                 priority
                 className="h-5 w-auto sm:h-6"
               />
-              <span className="label hidden sm:inline">
-                {PRODUCT.brand} · {PRODUCT.name}
-              </span>
+              <span className="label hidden sm:inline">{PRODUCT.brand} - Mini Store</span>
             </button>
 
             <div className="flex items-baseline gap-6">
@@ -1178,7 +1176,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                   <>
                     <div>
                       <h1
-                        className={`text-[2rem] font-bold leading-[1] tracking-[-0.02em] ${
+                        className={`text-xl font-bold leading-[1.1] tracking-[-0.02em] sm:text-2xl ${
                           linkOpen ? 'hidden' : ''
                         }`}
                       >
@@ -1239,12 +1237,20 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                        * one line to avoid.
                        */}
                       {choseCrypto && (
-                        <p className="note mt-2">
-                          {BRAND} receives {usd(PRODUCT.price + HANDLING_FEE)}. Your exchange adds
-                          its own withdrawal fee on top, so the amount it debits is slightly
-                          higher. Mesh shows the exact total before you confirm, and the receipt
-                          breaks it down.
-                        </p>
+                        <details className="mt-2">
+                          {/* Same shape as the "Also held" disclosure in the portfolio, so the two
+                              collapsibles on this screen behave and read the same way. */}
+                          <summary className="flex cursor-pointer items-baseline justify-between gap-4 list-none">
+                            <span className="label">Why your exchange may debit a little more</span>
+                            <span className="note underline underline-offset-2">Show</span>
+                          </summary>
+                          <p className="note mt-2">
+                            {BRAND} receives {usd(PRODUCT.price + HANDLING_FEE)}. Your exchange adds
+                            its own withdrawal fee on top, so the amount it debits is slightly
+                            higher. Mesh shows the exact total before you confirm, and the receipt
+                            breaks it down.
+                          </p>
+                        </details>
                       )}
                       {isComplete(address) && !linkOpen && (
                         <DeliverySummary address={address} onEdit={() => goto('delivery')} />
