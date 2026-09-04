@@ -14,6 +14,7 @@ export type FailureCode =
   | 'connect_declined'
   | 'connect_unavailable'
   | 'portfolio_failed'
+  | 'connection_expired'
   | 'no_eligible_assets'
   | 'preview_failed'
   | 'execution_failed'
@@ -72,6 +73,17 @@ const COPY: Record<FailureCode, { title: string; hint?: string; retryable: boole
   portfolio_failed: {
     title: 'We connected, but could not read your balances',
     hint: 'You can still pay. We just cannot show your holdings first.',
+    retryable: true
+  },
+  /**
+   * Distinct from `portfolio_failed` because the cure is different and so is the honest copy.
+   * A portfolio failure is a bad moment on a live connection and "carry on" is fair advice. This
+   * is the stored token no longer being accepted, where carrying on means paying against a
+   * connection we have just thrown away. The only way forward is to connect again.
+   */
+  connection_expired: {
+    title: 'Your account connection has expired',
+    hint: 'Connect again to see your balances and pay.',
     retryable: true
   },
   no_eligible_assets: {

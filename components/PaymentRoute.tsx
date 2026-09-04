@@ -81,10 +81,19 @@ export function FundingSource({
       )}
 
       <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+        {/**
+         * Three states, not two. Without the middle one this said "This account cannot cover
+         * $50.00" directly beneath "we could not read a balance for this account", because an
+         * unknown balance is falsy and fell through to the negative. Asserting a shortfall we
+         * have not measured is worse than saying nothing, especially when the account holds ten
+         * thousand USDC and the real fault is an expired connection.
+         */}
         <p className="text-sm text-muted">
-          {s?.covers
-            ? `Enough ${s.symbol} to cover this order.`
-            : `This account cannot cover ${usd(PRODUCT.price)} in ${PRODUCT.settlement.symbol}.`}
+          {!s
+            ? `Mesh checks the balance before it takes anything.`
+            : s.covers
+              ? `Enough ${s.symbol} to cover this order.`
+              : `This account cannot cover ${usd(PRODUCT.price)} in ${PRODUCT.settlement.symbol}.`}
         </p>
         <button type="button" onClick={onChangeAccount} className="btn-quiet">
           Change account

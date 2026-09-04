@@ -51,8 +51,12 @@ type Provider = {
 }
 
 /**
- * The routes that carry the integration. Nine exist; `GET /api/health`, `POST /api/session/reset`
- * and the `GET` on an order exist for the demo and are not part of what a merchant would build.
+ * The routes that carry the integration.
+ *
+ * Nine route files exist. `GET /api/health` and `POST /api/session/reset` are demo scaffolding and
+ * are left out, which leaves the seven below. Each is listed by the method that does the work, so
+ * `/api/mesh/connection` appears as its POST (its GET is the returning-shopper check) and
+ * `/api/orders/:id` as its PATCH (its GET is the settlement poll).
  */
 const ROUTES: { route: string; does: string; mesh: string | null }[] = [
   { route: 'POST /api/mesh/link-token', does: 'Mints a Link token on the click', mesh: 'POST /api/v1/linktoken' },
@@ -346,7 +350,23 @@ export function TechnicalView({
                 {copied ? 'Copied' : 'Copy log'}
               </button>
             </div>
-            {order.log.length === 0 && <p className="text-sm text-muted">Nothing yet. Start a payment.</p>}
+            {/**
+             * An empty log next to a manifest with stamped rows reads as a broken panel, and it
+             * was the first thing a tester asked about. It is not broken: a returning shopper's
+             * connection is reused from the session, no Link session opens, and the SDK therefore
+             * emits nothing. The manifest rows above came from our own server calls. Saying so
+             * turns a confusing blank into the more interesting fact.
+             */}
+            {order.log.length === 0 &&
+              (order.steps.some(s => s.state !== 'pending') ? (
+                <p className="text-sm text-muted">
+                  Nothing yet, and that is correct. This session reused a stored connection, so no
+                  Link session opened and the SDK had nothing to emit. The manifest rows above were
+                  stamped by our own server calls. Events start arriving at Pay.
+                </p>
+              ) : (
+                <p className="text-sm text-muted">Nothing yet. Start a payment.</p>
+              ))}
             <ol>
               {order.log.map((e, i) => (
                 <li key={i} className="rule-b py-1.5">
