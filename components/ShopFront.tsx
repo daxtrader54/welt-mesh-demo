@@ -50,7 +50,7 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
               className="group block w-full text-left"
               style={{ ['--plate-accent' as string]: c.accent }}
             >
-              <div className="relative aspect-square w-full border border-rule bg-plate transition-colors group-hover:border-ink">
+              <div className="relative aspect-[3/2] w-full border border-rule bg-plate transition-colors group-hover:border-ink">
                 <Image
                   src={plateSrc(c.id, 'lateral')}
                   alt={`${PRODUCT.name} in ${c.name}`}

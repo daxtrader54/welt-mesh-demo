@@ -1,31 +1,46 @@
 'use client'
 
 import Image from 'next/image'
-import { PLATES, plateSrc, type ColourwayId, type PlateId } from '@/lib/product'
+import { PLATES, SPEC, plateSrc, type ColourwayId, type PlateId } from '@/lib/product'
 
 /**
  * The product sits on a white drawing plate against the warm ground, which is what makes the
  * photographs work without knocking out their backgrounds.
  *
- * Two of the five views take annotation well. A side profile does not, because a leader line
- * across a shoe's flank just looks like a scratch. The sole and the top-down have real structure
- * to point at, so those are the ones that get callouts.
+ * Callouts are positioned as percentages of the plate and labelled in HTML rather than SVG text.
+ * The previous version used a fixed 800-unit viewBox with 19-unit type, which scaled with the
+ * container: 12.7px on a wide desktop and 6.4px on a phone, where it read as a rendering fault.
+ * Percentages also survive the images being re-cropped, which the fixed coordinates did not.
  */
 
-type Callout = { n: string; label: string; x: number; y: number; tx: number; ty: number }
+type Callout = {
+  /** Matches an entry in SPEC, so the drawing and the table are the same numbered list. */
+  n: string
+  /** Where the dot sits on the shoe, as a percentage of the plate. */
+  x: number
+  y: number
+  /** Which side the label sits on. */
+  side: 'left' | 'right'
+  /** Vertical position of the label, as a percentage. */
+  ly: number
+}
 
-// Hand-placed against the 800x800 source frames, which are consistent across all four colourways.
+/**
+ * One callout per spec entry, no more, so following a number from the drawing to the table always
+ * lands somewhere. The profile carries the midsole because that is where the sidewall print is;
+ * the sole and the top-down carry the rest. A side profile takes one leader line and no more.
+ */
 const CALLOUTS: Partial<Record<PlateId, Callout[]>> = {
-  outsole: [
-    { n: '03', label: 'Flex grooves', x: 250, y: 330, tx: 62, ty: 208 },
-    { n: '03', label: 'Heel pad', x: 640, y: 400, tx: 700, ty: 596 }
-  ],
+  lateral: [{ n: '02', x: 52, y: 78, side: 'left', ly: 88 }],
+  outsole: [{ n: '03', x: 34, y: 45, side: 'left', ly: 18 }],
   top: [
-    { n: '01', label: 'Mesh upper', x: 400, y: 150, tx: 640, ty: 92 },
-    { n: '05', label: 'Lace closure', x: 400, y: 300, tx: 128, ty: 244 },
-    { n: '04', label: 'Memory foam', x: 400, y: 560, tx: 656, ty: 640 }
+    { n: '01', x: 50, y: 17, side: 'right', ly: 10 },
+    { n: '05', x: 50, y: 40, side: 'left', ly: 34 },
+    { n: '04', x: 50, y: 72, side: 'right', ly: 80 }
   ]
 }
+
+const spec = (n: string) => SPEC.find(s => s.n === n)
 
 export function ProductPlate({
   colourway,
@@ -43,9 +58,9 @@ export function ProductPlate({
 
   return (
     <div>
-      {/* Not square. The source frames put the shoe in a middle band, so a square plate leaves a
-          quarter of its height empty above and below the hero view. */}
-      <div className="relative aspect-[5/4] w-full border border-rule bg-plate">
+      {/* 3:2, matched to the profile shots after cropping. The source frames were square with the
+          shoe in a middle band, which left a quarter of the plate empty above and below the hero. */}
+      <div className="relative aspect-[3/2] w-full border border-rule bg-plate">
         <Image
           key={`${colourway}-${plate}`}
           src={plateSrc(colourway, plate)}
@@ -56,30 +71,47 @@ export function ProductPlate({
           className="object-contain"
         />
 
+        {/* Hidden on narrow screens: the labels need room the plate does not have on a phone. */}
         {callouts.length > 0 && (
-          <svg
-            viewBox="0 0 800 800"
-            className="pointer-events-none absolute inset-0 h-full w-full"
-            aria-hidden
-          >
-            {callouts.map((c, i) => (
-              <g key={i} stroke="var(--plate-accent)" fill="var(--plate-accent)">
-                <circle cx={c.x} cy={c.y} r="4" />
-                <line x1={c.x} y1={c.y} x2={c.tx} y2={c.ty} strokeWidth="1" />
-                <text
-                  x={c.tx}
-                  y={c.ty - 10}
-                  textAnchor={c.tx > 400 ? 'end' : 'start'}
-                  className="font-mono"
-                  style={{ fontSize: 19, letterSpacing: '0.1em' }}
-                  fill="var(--color-ink)"
-                  stroke="none"
-                >
-                  {c.n} {c.label.toUpperCase()}
-                </text>
-              </g>
+          <div className="pointer-events-none absolute inset-0 hidden sm:block" aria-hidden>
+            <svg className="absolute inset-0 h-full w-full" preserveAspectRatio="none">
+              {callouts.map(c => (
+                <line
+                  key={c.n}
+                  x1={`${c.x}%`}
+                  y1={`${c.y}%`}
+                  x2={`${c.side === 'left' ? 8 : 92}%`}
+                  y2={`${c.ly + 2}%`}
+                  stroke="var(--plate-accent)"
+                  strokeWidth="1"
+                  vectorEffect="non-scaling-stroke"
+                />
+              ))}
+            </svg>
+
+            {callouts.map(c => (
+              <span
+                key={`${c.n}-dot`}
+                className="absolute block h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                style={{ left: `${c.x}%`, top: `${c.y}%`, background: 'var(--plate-accent)' }}
+              />
             ))}
-          </svg>
+
+            {callouts.map(c => (
+              <span
+                key={`${c.n}-label`}
+                className="label absolute whitespace-nowrap text-ink"
+                style={{
+                  top: `${c.ly}%`,
+                  left: c.side === 'left' ? '8%' : undefined,
+                  right: c.side === 'right' ? '8%' : undefined,
+                  transform: c.side === 'left' ? undefined : 'translateX(0)'
+                }}
+              >
+                {c.n} {spec(c.n)?.label ?? ''}
+              </span>
+            ))}
+          </div>
         )}
 
         <span className="label absolute bottom-3 left-3">{plate}</span>
@@ -88,8 +120,8 @@ export function ProductPlate({
           <span
             className="stamp data absolute right-5 top-5 border-2 px-3 py-1.5 text-sm font-bold uppercase tracking-[0.2em]"
             style={{
-              borderColor: 'var(--plate-accent)',
-              color: 'var(--plate-accent)',
+              borderColor: 'var(--color-positive)',
+              color: 'var(--color-positive)',
               transform: 'rotate(-6deg)'
             }}
           >
@@ -108,7 +140,7 @@ export function ProductPlate({
               onClick={() => onPlateChange(p.id)}
               aria-pressed={active}
               aria-label={`${p.label} view`}
-              className={`relative aspect-square border bg-plate transition-colors ${
+              className={`relative aspect-[3/2] border bg-plate transition-colors ${
                 active ? 'border-ink' : 'border-rule hover:border-rule-strong'
               }`}
             >
@@ -116,7 +148,7 @@ export function ProductPlate({
                 src={plateSrc(colourway, p.id)}
                 alt=""
                 fill
-                sizes="90px"
+                sizes="120px"
                 className="object-contain p-1"
               />
             </button>
