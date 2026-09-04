@@ -21,12 +21,15 @@ export type Funding = {
 
 export function FundingSource({
   funding,
+  providerName,
   onChangeAccount
 }: {
-  funding: Funding
+  /** Null when the account connected but its balances could not be read. Not a failure. */
+  funding: Funding | null
+  providerName: string | null
   onChangeAccount: () => void
 }) {
-  const s = funding.settlement
+  const s = funding?.settlement ?? null
 
   return (
     <section className="rule-t pt-4">
@@ -34,8 +37,10 @@ export function FundingSource({
 
       <div className="flex items-start justify-between gap-6">
         <div>
-          <div className="text-lg font-semibold leading-tight">{funding.provider}</div>
-          {funding.accountName && <div className="note">{funding.accountName}</div>}
+          <div className="text-lg font-semibold leading-tight">
+            {funding?.provider ?? providerName ?? 'Your account'}
+          </div>
+          {funding?.accountName && <div className="note">{funding.accountName}</div>}
         </div>
 
         {s && (
@@ -65,8 +70,9 @@ export function FundingSource({
         </div>
       ) : (
         <p className="mt-3 text-sm text-muted">
-          We could not read a {PRODUCT.settlement.symbol} balance for this account. You can still
-          continue and choose another account.
+          We could not read a {PRODUCT.settlement.symbol} balance for this account, so we cannot
+          show what you hold. You can still pay, and Mesh will check the balance before it takes
+          anything.
         </p>
       )}
 

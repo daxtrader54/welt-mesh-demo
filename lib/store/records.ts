@@ -98,7 +98,11 @@ export async function putOrder(record: OrderRecord): Promise<void> {
  * Returns false when this event has already been handled. `EventId` is stable across Mesh's
  * retries, so a duplicate delivery is a no-op rather than a second state change.
  */
-export async function claimWebhookEvent(eventId: string): Promise<boolean> {
+export async function claimWebhookEvent(eventId: string, peek = false): Promise<boolean> {
+  if (peek) {
+    // Look without taking it, so the key is only consumed once the work has actually succeeded.
+    return (await store().get(webhookKey(eventId))) === null
+  }
   return store().setIfAbsent(webhookKey(eventId), { at: Date.now() }, WEBHOOK_TTL)
 }
 
