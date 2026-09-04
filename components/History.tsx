@@ -74,7 +74,7 @@ export function History({ onBack }: { onBack: () => void }) {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <div className="label">Merchant view</div>
-          <h1 className="mt-1 text-[2rem] font-bold leading-[1] tracking-[-0.02em]">
+          <h1 className="mt-1 text-xl font-bold leading-[1.1] tracking-[-0.02em] sm:text-2xl">
             Payment history
           </h1>
           <p className="mt-3 max-w-xl text-sm leading-relaxed text-muted">

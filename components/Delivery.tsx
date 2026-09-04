@@ -75,7 +75,7 @@ export function DeliveryForm({
         Back to the bag
       </button>
 
-      <h1 className="mt-5 text-[2rem] font-bold leading-[1] tracking-[-0.02em]">Where is it going?</h1>
+      <h1 className="mt-5 text-xl font-bold leading-[1.1] tracking-[-0.02em] sm:text-2xl">Where is it going?</h1>
       <p className="note mt-2">
         Stays in this browser. Nothing is sent to our servers, nothing is stored, and nothing ships,
         because this is a demonstration store.

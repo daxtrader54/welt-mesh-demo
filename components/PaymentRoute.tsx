@@ -97,13 +97,21 @@ export function FundingSource({
          * have not measured is worse than saying nothing, especially when the account holds ten
          * thousand USDC and the real fault is an expired connection.
          */}
-        <p className="text-sm text-muted">
-          {!s
-            ? `Mesh checks the balance before it takes anything.`
-            : s.covers
-              ? `Enough ${s.symbol} to cover this order.`
+        {/**
+         * Silence when the balance covers it.
+         *
+         * "Enough USDC to cover this order" was read as its opposite often enough to be a defect:
+         * a sentence beginning "Enough" scans as a warning, and it sat where a warning would sit.
+         * A covered balance needs no sentence. The two states that do say something are the one we
+         * could not measure and the one that genuinely falls short.
+         */}
+        {(!s || !s.covers) && (
+          <p className="text-sm text-muted">
+            {!s
+              ? `Mesh checks the balance before it takes anything.`
               : `This account cannot cover ${usd(PRODUCT.price)} in ${PRODUCT.settlement.symbol}.`}
-        </p>
+          </p>
+        )}
         <button type="button" onClick={onChangeAccount} className="btn-quiet">
           Change account
         </button>

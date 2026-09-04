@@ -108,6 +108,15 @@ body {
   border: 0;
 }
 
+/**
+ * `list-none` alone leaves the triangle in Safari, which needs its own pseudo-element hidden.
+ * Both disclosures in this build supply their own "Show" affordance, so the default marker is
+ * duplicate furniture wherever it survives.
+ */
+summary::-webkit-details-marker {
+  display: none;
+}
+
 .rule-t {
   border-top: 1px solid var(--color-rule);
 }

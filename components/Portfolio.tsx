@@ -128,17 +128,24 @@ export function Portfolio({
 
   return (
     <section className="rule-t pt-5">
-      <div className="flex items-baseline justify-between gap-4">
-        <div>
-          <div className="label">Held at</div>
-          <div className="text-lg font-semibold leading-tight">{provider}</div>
-          {accountName && <div className="note">{accountName}</div>}
-        </div>
+      {/**
+       * One line. This is context for the choice below it, not the point of the screen.
+       *
+       * It was a four-line block with two stacked labels and 18px type on both sides, which gave
+       * the account more weight than the asset the shopper is actually choosing and pushed the
+       * choice itself further down a phone.
+       */}
+      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <p className="text-sm">
+          <span className="label">Held at</span>{' '}
+          <span className="font-semibold">{provider}</span>
+          {accountName && <span className="text-muted"> · {accountName}</span>}
+        </p>
         {cryptoValue !== null && (
-          <div className="text-right">
-            <div className="label">Crypto value</div>
-            <div className="data text-lg font-medium">{usd(cryptoValue)}</div>
-          </div>
+          <p className="text-sm">
+            <span className="label">Crypto value</span>{' '}
+            <span className="data font-medium">{usd(cryptoValue)}</span>
+          </p>
         )}
       </div>
 
@@ -154,19 +161,17 @@ export function Portfolio({
           </div>
 
           {/**
-           * Relabelled, because the old heading was the source of a fair complaint.
+           * What the label above does not already say, and nothing else.
            *
-           * These radio buttons pick what the MERCHANT is paid in. They were introduced by "Pay
-           * with any of these", which reads as what the shopper spends, so a shopper holding
-           * $398,000 of BTC quite reasonably asked why BTC was not among them. It never could be:
-           * this list is the merchant's accepted assets, and the merchant settles in stablecoins.
-           *
-           * What the payment is funded from is a different question with a different owner, and
-           * saying so here is cheaper than letting the picker imply an answer it does not have.
+           * "Which asset the merchant is paid in" repeated the heading it sat under word for word.
+           * The half worth keeping is the one about funding, because these radio buttons pick what
+           * the MERCHANT receives and a shopper reasonably reads them as what they spend. That is a
+           * different question with a different owner, and saying so is cheaper than letting the
+           * picker imply an answer it does not have.
            */}
           <p className="note mt-2">
-            Which asset the merchant is paid in. What funds it is decided at payment: Mesh spends
-            your balance in that asset, or converts another of your holdings if you are short.
+            How it is funded is decided at payment: Mesh spends your balance in that asset, or
+            converts another holding if you are short.
           </p>
 
           <ul className="mt-2">
