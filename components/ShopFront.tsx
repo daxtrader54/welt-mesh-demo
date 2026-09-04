@@ -4,6 +4,7 @@ import Image from 'next/image'
 import { usd } from '@/lib/format'
 import { RATING, Stars } from './Reviews'
 import {
+  ACCEPTED_ASSETS,
   COLOURWAYS,
   PRODUCT,
   SAVING,
@@ -29,13 +30,20 @@ import {
 export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void }) {
   return (
     <div className="py-10">
-      <div className="rule-b flex flex-wrap items-end justify-between gap-x-10 gap-y-4 pb-8">
+      <div className="rule-b flex flex-wrap items-start justify-between gap-x-10 gap-y-4 pb-8">
         <div className="max-w-xl">
-          <p className="label mb-3">{PRODUCT.brand} · End of run</p>
-          <h1 className="text-[3rem] font-bold leading-[0.92] tracking-[-0.035em] sm:text-[4rem]">
-            The Track
-            <br />
-            Syntac
+          {/**
+           * A shop heading, not a poster.
+           *
+           * This was 64px of display type across two lines, which is a magazine cover rather than a
+           * listing page: it pushed the price, the rating and the four products it is meant to
+           * introduce below the fold, and it made the shoe's name the loudest thing on a page whose
+           * job is selling four colours of it. A category line, a normal product heading and the
+           * price on the same eye level is the shape every clearance retailer uses.
+           */}
+          <p className="label mb-2">{PRODUCT.brand} · End of run</p>
+          <h1 className="text-[1.75rem] font-bold leading-[1.05] tracking-[-0.02em] sm:text-[2.25rem]">
+            {PRODUCT.brand} {PRODUCT.name}
           </h1>
           {/* Rating and count together, always. Three reviews is self-evidently a demonstration
               rather than a trading record, and the count is what makes that obvious. */}
@@ -51,21 +59,49 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
           </p>
         </div>
 
-        <div className="shrink-0 text-right">
+        <div className="shrink-0 sm:text-right">
+          {/**
+           * The payment banner, in the space the oversized heading used to leave empty.
+           *
+           * It is the one thing about this shop a customer would not assume, and it belongs at the
+           * top where a shop puts the payment methods it wants known rather than three screens down
+           * beside the returns policy. Named assets, because "crypto accepted" on its own is the
+           * vague sort of claim the brief warns against, and these three are the merchant's real
+           * accepted list rather than decoration.
+           */}
+          <div className="mb-4 inline-block border border-ink bg-plate px-4 py-3 text-left">
+            <div className="flex items-center gap-2">
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ background: 'var(--color-accent-deep)' }}
+                aria-hidden
+              />
+              <span className="label text-ink">Crypto accepted</span>
+            </div>
+            <div className="data mt-1.5 text-sm font-semibold">
+              {ACCEPTED_ASSETS.map(a => a.symbol).join(' · ')}
+            </div>
+            <p className="note mt-1 max-w-[15rem]">
+              Pay from an exchange account you already hold. No wallet, no transfers, no addresses.
+            </p>
+          </div>
+
           {/* The saving stated outright, which is what a clearance listing is for. Both figures
               come from the product record, so the badge cannot drift from the price. */}
-          <span
-            className="data mb-2 inline-block px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em]"
-            style={{ background: 'var(--color-accent)', color: 'var(--color-ink)' }}
-          >
-            Save {usd(SAVING)} · {SAVING_PERCENT}% off
-          </span>
-          <div className="data text-4xl font-semibold leading-none tracking-[-0.03em]">
-            {usd(PRODUCT.price)}
-          </div>
-          <div className="label mt-2">
-            Was <span className="line-through">{usd(PRODUCT.rrp)}</span> · UK {SIZE_RUN.from} to{' '}
-            {SIZE_RUN.to}
+          <div>
+            <span
+              className="data mb-2 inline-block px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em]"
+              style={{ background: 'var(--color-accent)', color: 'var(--color-ink)' }}
+            >
+              Save {usd(SAVING)} · {SAVING_PERCENT}% off
+            </span>
+            <div className="data text-4xl font-semibold leading-none tracking-[-0.03em]">
+              {usd(PRODUCT.price)}
+            </div>
+            <div className="label mt-2">
+              Was <span className="line-through">{usd(PRODUCT.rrp)}</span> · UK {SIZE_RUN.from} to{' '}
+              {SIZE_RUN.to}
+            </div>
           </div>
         </div>
       </div>
