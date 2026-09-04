@@ -23,6 +23,7 @@ import { FundingSource, Manifest, type Funding } from './PaymentRoute'
 import { PretendPaymentModal } from './PretendPayment'
 import { ProductPlate } from './ProductPlate'
 import { ProductPanels } from './Reviews'
+import { ShopFront } from './ShopFront'
 import { Receipt } from './Receipt'
 import { ConsoleBar, TechnicalView, type ConnectionSummary, type ServerCall } from './TechnicalView'
 import { useMeshLink } from './useMeshLink'
@@ -40,10 +41,10 @@ import { useMeshLink } from './useMeshLink'
  * actually funds it comes back on `transferPreviewed` and ends up on the receipt.
  */
 
-type Step = 'product' | 'bag' | 'checkout' | 'done'
+type Step = 'shop' | 'product' | 'bag' | 'checkout' | 'done'
 
 export function Shop({ demoMode }: { demoMode: boolean }) {
-  const [step, setStep] = useState<Step>('product')
+  const [step, setStep] = useState<Step>('shop')
   const [colourwayId, setColourwayId] = useState<ColourwayId>(DEFAULT_COLOURWAY)
   const [plate, setPlate] = useState<PlateId>('lateral')
   const [size, setSize] = useState<string | null>(null)
@@ -257,7 +258,7 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
   const reset = useCallback(async () => {
     await fetch('/api/session/reset', { method: 'POST' }).catch(() => {})
     dispatch({ type: 'reset' })
-    setStep('product')
+    setStep('shop')
     setBag(null)
     setPurchased(null)
     setPickedIntegrationId(null)
@@ -329,7 +330,7 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
           <header className="rule-b flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 py-5 sm:py-6">
             <button
               type="button"
-              onClick={() => goto('product')}
+              onClick={() => goto('shop')}
               className="flex items-baseline gap-5 text-left"
             >
               <span className="text-xl font-extrabold leading-none tracking-[0.2em] sm:text-2xl">
@@ -353,8 +354,22 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
             </div>
           </header>
 
+          {step === 'shop' && (
+            <ShopFront
+              onSelect={id => {
+                setColourwayId(id)
+                setPlate('lateral')
+                goto('product')
+              }}
+            />
+          )}
+
           {step === 'product' && (
             <>
+              <button type="button" onClick={() => goto('shop')} className="btn-quiet mt-6">
+                All colourways
+              </button>
+
               {/* Explicit grid placement, because mobile stacks in DOM order. The first pass put
                   the entire spec sheet between the photograph and the price. */}
               <main className="grid gap-x-16 gap-y-10 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
@@ -455,10 +470,10 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
             <BagView
               item={bag}
               onCheckout={() => goto('checkout')}
-              onBack={() => goto('product')}
+              onBack={() => goto('shop')}
               onRemove={() => {
                 setBag(null)
-                goto('product')
+                goto('shop')
               }}
             />
           )}
