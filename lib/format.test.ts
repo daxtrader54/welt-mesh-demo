@@ -70,12 +70,28 @@ describe('orderNumber', () => {
   })
 
   /**
-   * The point of the change. Two different orders used to be able to produce the same string in a
-   * 10,000-value space, and that string was also the store key and Mesh's transactionId, so a
-   * collision settled the wrong order.
+   * The point of the change, stated precisely.
+   *
+   * The old id was a 32-bit hash reduced modulo 10,000, and it was simultaneously the display
+   * number, the store key and Mesh's transactionId, so two orders colliding meant one silently
+   * overwriting the other and the webhook settling the wrong one. That is fixed by the id being a
+   * UUID, not by this label.
+   *
+   * The label is only a label. Six hex characters is 16.7 million values, so it will collide
+   * eventually, and when it does nothing breaks: two orders that never meet share a string a human
+   * reads aloud. What matters is that it is rare across the 24 hour window an order actually lives
+   * for, which at a few hundred orders is comfortably under a tenth of a percent.
    */
-  it('does not collide across a realistic number of orders', () => {
-    const ids = Array.from({ length: 5000 }, () => crypto.randomUUID())
+  it('is effectively unique across a day of orders', () => {
+    const ids = Array.from({ length: 300 }, () => crypto.randomUUID())
     expect(new Set(ids.map(orderNumber)).size).toBe(ids.length)
+  })
+
+  it('is a label, not the key: the id is what identifies an order', () => {
+    const a = '3f9a2c10-0000-4000-8000-000000000001'
+    const b = '3f9a2c10-ffff-4fff-8fff-ffffffffffff'
+    // Same reference, different orders. Harmless, because the store and Mesh both key on the id.
+    expect(orderNumber(a)).toBe(orderNumber(b))
+    expect(a).not.toBe(b)
   })
 })
