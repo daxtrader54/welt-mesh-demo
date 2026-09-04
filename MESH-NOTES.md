@@ -151,6 +151,16 @@ from other holdings.
 So the conversion signal is one boolean on the asset you are collecting, not a list of the assets
 the shopper could spend.
 
+**Which means it cannot tell you whether a specific held asset can pay.** Send three stablecoins as
+`toAddresses` and you get an answer about three stablecoins, whatever else the account holds. An
+account with fourteen positions returned three. The other eleven are unassessed, not refused, and a
+UI that renders both as blank space will be read as the second. `amountInFiat` is not what narrows
+it: at $50 that filter would have admitted ten of the fourteen.
+
+Whether asking a wider question is possible we did not establish. `toAddresses` is documented as
+optional, so a call without it may return the whole portfolio with general transfer eligibility,
+but eligibility with no destination may also be meaningless. Untested.
+
 `transferBalanceFundingAvailability.status` exists in the OpenAPI spec with values
 `disabled | available | requiresAmountLowering | notApplicable | unavailable`, but it is **not in
 the documented response example** and we have not observed it. Treat it as optional.
