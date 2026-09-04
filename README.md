@@ -74,7 +74,7 @@ event arrives within twelve seconds it says so and names the domain to register.
 | `MESH_WEBHOOK_SECRET` | no | **Sandbox** Transfer Webhook Callback URI. Shown once. Without it settlement never arrives |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | no | Upstash directly. Without a store, settlement cannot reach the browser on serverless |
 | `KV_REST_API_URL` / `_TOKEN` | no | What the Vercel Marketplace Upstash integration sets instead. Either pair works; set one, not both |
-| `MESH_COINBASE_INTEGRATION_ID` | no | Blank shows Mesh's picker, which is the default. Set it to open Link straight on one provider |
+| `MESH_COINBASE_INTEGRATION_ID` | no | A server-side override. Leave it blank: `/api/mesh/providers` picks the default from the live catalogue, which is what you want. Set it only to pin one provider |
 | `NEXT_PUBLIC_MERCHANT_HANDLING_FEE` | no | Merchant fee in dollars, sent as Mesh's `clientFee`. `0` by default, and see Decisions for why |
 
 `?demo=1` opens the technical panel docked. `Ctrl/Cmd + Shift + D` toggles it. `/api/health` reports
@@ -83,7 +83,7 @@ which variables are present, without values, and whether the store is Redis or m
 ### Scripts
 
 ```bash
-npm test                                    # 72 tests, no secrets, under a second
+npm test                                    # 83 tests, no secrets, under a second
 npm run typecheck
 node scripts/webhook-check.mjs <url>        # prove the webhook endpoint without waiting for Mesh
 node scripts/crop-product-images.mjs        # re-frame the photographs from public/product-src
@@ -129,7 +129,7 @@ components/ shop, listing, plate, checkout, portfolio, bag, receipt, technical p
 scripts/    webhook-check, crop-product-images
 ```
 
-Nine route handlers. Six are the integration; `orders`, `health` and `reset` exist for the demo.
+Nine route files. Seven carry the integration; `health` and `session/reset` exist for the demo.
 Everything runs on the Node runtime, not edge: `crypto.createHmac` needs it and the Mesh calls are
 simpler there.
 
@@ -261,7 +261,7 @@ does not appear, nothing arrived.
 
 ## For the merchant's engineer
 
-**Yours:** seven route handlers, one of them a webhook. A key/value store for the order and for webhook
+**Yours:** seven route files, one of them a webhook. A key/value store for the order and for webhook
 idempotency. A page that reacts to SDK events. That is the whole integration.
 
 **Mesh's:** the provider catalogue, OAuth and MFA for every exchange, asset and network eligibility,
@@ -461,8 +461,23 @@ expired auth token, Mesh timeouts, and repeated clicks.
 
 Three that are non-obvious:
 
-- **A failed balance read is not fatal.** The shopper can still pay, they just do not get to see
-  their holdings first. It renders as a warning beside a live pay button, not a dead end.
+- **A failed balance read is not fatal, unless the connection is dead.** Normally the shopper can
+  still pay, they just do not get to see their holdings first, so it renders as a warning beside a
+  live pay button. The exception is Mesh refusing the stored token, which it does two ways and
+  neither is a 401: `invalidIntegrationToken` for one it does not recognise, and *Unauthorized
+  token* for one it will no longer accept. Both arrive as a 400. There, *carry on* is not honest
+  advice, and a session log settles why: passing the same token into a payment session produces
+  `transferConfigureError` with *"Please login again to continue."* four seconds in, before the
+  shopper touches anything. The payment was already broken by the same cause. So both paths now
+  recognise it, the connection is dropped server side, and the shopper goes back to the payment
+  options with a working connect button. Leaving it on file was a real dead end: the shop kept
+  offering *already connected, no sign-in this time*, and every retry repeated the same failure.
+- **An empty `transferNoEligibleAssets` does not overwrite a better answer.** It fires in the same
+  millisecond as the configure error above, with an empty `arrayOfTokensHeld`, which is what an
+  account Mesh could not read looks like as well as an empty one. Arriving second, it replaced the
+  real reason with *Nothing in that account can cover this* about an account holding ten thousand
+  USDC. An empty array now defers to a failure that is already set. A populated one still wins,
+  because then it genuinely knows something the earlier event did not.
 - **Closing Link on the success page is not a failure.** Treating it as one is a classic way to make
   a working demo look broken. Nor does closing Link after a failure overwrite the failure: the
   specific state survives, which is the only way the designed failures are reachable at all.
@@ -473,11 +488,12 @@ Three that are non-obvious:
 
 ## Testing
 
-72 tests over the logic where a regression costs something: webhook HMAC verification including the
+83 tests over the logic where a regression costs something: webhook HMAC verification including the
 re-serialisation trap, `EventId` idempotency, both link token builders, the merchant fee ratio and the
 guarantee it never changes the destination amount, the provider catalogue mapping and the merchant
-ranking on top of it, what the customer was actually charged, the event to order reducer, and money
-formatting. Runs in under a second, needs no secrets.
+ranking on top of it, what the customer was actually charged, the event to order reducer, whether a
+Mesh error means the stored token is dead, and money formatting. Runs in under a second, needs no
+secrets.
 
 The reducer fixtures are trimmed copies of real sandbox payloads, including two failures that actually
 happened: a wallet not present on the device, and an account with nothing eligible.
