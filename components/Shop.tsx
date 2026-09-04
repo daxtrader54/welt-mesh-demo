@@ -898,39 +898,15 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
            * A checkout is about finalising an amount. Handing sixty percent of the screen to an
            * annotated product drawing and squeezing the itemisation, the delivery address and the
            * payment method into a 384px rail is the product page wearing a checkout as a sidebar.
-           * So checkout drops the plate, centres one column, and shows the shoe the way a checkout
-           * shows anything: a thumbnail on its line item. It also gives Mesh Link half as much
-           * width again to render in.
-           *
-           * The receipt keeps the plate, because that is the YOURS moment and the product earns
-           * the room there.
+           * So both drop the plate and centre one column, showing the shoe the way a checkout shows
+           * anything: a thumbnail on its line item. It also gives Mesh Link half as much width
+           * again to render in. The confirmation went the same way for the same reason, once it
+           * was pointed out that an annotated engineering drawing is not what anyone expects to
+           * meet after paying. The YOURS stamp moved onto the receipt thumbnail.
            */}
           {(step === 'checkout' || step === 'done') && item && (
-            <main
-              className={
-                step === 'done'
-                  ? 'grid gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]'
-                  : 'mx-auto w-full max-w-[38rem] py-8'
-              }
-            >
-              {step === 'done' && (
-                <section className="order-2 lg:order-none md:col-start-1 md:row-start-1 lg:col-start-1 lg:row-start-1">
-                  <ProductPlate
-                    colourway={item.colourway.id}
-                    plate={plate}
-                    onPlateChange={setPlate}
-                    owned={paid}
-                  />
-                </section>
-              )}
-
-              <section
-                className={
-                  step === 'done'
-                    ? 'order-1 flex flex-col gap-7 md:order-none md:col-start-2 md:row-start-1 lg:col-start-2 lg:row-start-1'
-                    : 'flex flex-col gap-7'
-                }
-              >
+            <main className="mx-auto w-full max-w-[38rem] py-8">
+              <section className="flex flex-col gap-7">
                 {step === 'checkout' && !paid && (
                   <>
                     <div>
@@ -1197,16 +1173,14 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                         </span>
                       </div>
                       <h1 className="mt-3 text-[2.4rem] font-bold leading-[0.95] tracking-[-0.03em]">
-                        Yours.
+                        {address.name ? `Thank you, ${address.name.split(' ')[0]}.` : 'Thank you.'}
                       </h1>
                       <p className="mt-3 text-sm leading-relaxed text-muted">
-                        Order <span className="data">{orderRef}</span> is paid. We took{' '}
-                        {usd(chargedTotal(order, PRODUCT.price + HANDLING_FEE))} in{' '}
-                        {order.payment.symbol} from your {order.source?.name ?? 'connected'} account
-                        and sent it to the merchant on {order.payment.networkName}.
+                        Order <span className="data">{orderRef}</span> is confirmed and paid. Your{' '}
+                        {PRODUCT.brand} {PRODUCT.name} in {item.colourway.name} is on its way.
                         {settled
-                          ? ' The merchant has confirmed receipt.'
-                          : ' We will confirm here when the merchant acknowledges it.'}
+                          ? ' The merchant has confirmed receipt of the payment.'
+                          : ' We will confirm below when the merchant acknowledges the payment.'}
                       </p>
                     </div>
 

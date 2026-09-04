@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { token, truncate, usd } from '@/lib/format'
-import { HANDLING_FEE, PRODUCT, type Colourway } from '@/lib/product'
+import { HANDLING_FEE, PRODUCT, plateSrc, type Colourway } from '@/lib/product'
 import { chargedTotal, describeFundingType, meshTotalDisagrees, type OrderState } from '@/lib/order/state'
 import { formatAddress, type Address } from './Delivery'
 
@@ -63,33 +64,10 @@ export function Receipt({
   /** True when two decimal places cannot show the fee at all, which is the case worth naming. */
   const fiatHidesFee = totalCharged > PRODUCT.price && usd(totalCharged) === usd(PRODUCT.price)
 
-  const rows: { label: string; value: string; mono?: boolean }[] = [
-    { label: 'Item', value: `${PRODUCT.brand} ${PRODUCT.name}` },
-    { label: 'Colour', value: `${colourway.name} · ${colourway.ref}` },
-    { label: 'Size', value: size ?? '—' },
-    { label: 'Price', value: usd(PRODUCT.price), mono: true },
-    /**
-     * The fees belong in the body, not behind a disclosure. Without them the receipt showed a
-     * $50.00 price and a $50.01 total with nothing on screen accounting for the difference, which
-     * is the one thing a receipt exists to prevent.
-     */
-    /**
-     * Where the money actually came from, when it was not simply the asset being sent.
-     *
-     * This is the line the whole integration exists to produce. Someone holding BTC and no USDC
-     * buys a dollar-priced pair of trainers, Mesh converts on the way through, and the merchant is
-     * paid in the asset it asked for. A receipt that prints the destination and stays quiet about
-     * that has hidden the interesting half of the transaction.
-     */
-    ...order.funding
-      .filter(f => f.type !== 'existingCryptocurrencyBalance')
-      .map(f => ({
-        label: 'Funded by',
-        value: f.symbol
-          ? `${describeFundingType(f.type)} ${f.amountInCrypto ? `${token(f.amountInCrypto)} ` : ''}${f.symbol}`
-          : describeFundingType(f.type),
-        mono: false
-      })),
+  /** Just the money. Everything else moved to a block that suits it better than a table row does. */
+  const money: { label: string; value: string; mono?: boolean }[] = [
+    { label: PRODUCT.name, value: usd(PRODUCT.price), mono: true },
+    { label: 'Delivery', value: 'Free' },
     ...(order.fees.institution
       ? [
           {
@@ -103,15 +81,7 @@ export function Receipt({
       ? [{ label: 'Handling fee', value: token(order.fees.client, p.symbol), mono: true }]
       : HANDLING_FEE > 0
         ? [{ label: 'Handling fee', value: usd(HANDLING_FEE), mono: true }]
-        : []),
-    { label: 'Paid with', value: p.symbol ?? PRODUCT.settlement.symbol },
-    { label: 'Network', value: p.networkName ?? PRODUCT.settlement.network },
-    { label: 'From', value: order.source?.name ?? '—' },
-    // Never left the browser, so it prints from local state rather than from the order record.
-    ...(address.name ? [{ label: 'Deliver to', value: address.name }] : []),
-    ...(address.line1 ? [{ label: 'Address', value: formatAddress(address) }] : []),
-    { label: 'Delivery', value: 'Free · 2 to 4 days' },
-    { label: 'Status', value: settled ? 'Settled' : 'Paid' }
+        : [])
   ]
 
   const detail: { label: string; value: string }[] = [
@@ -138,26 +108,69 @@ export function Receipt({
           <span className="label">{settled ? 'Settled' : 'Paid'}</span>
         </div>
 
+        {/**
+         * A confirmation, not a data table.
+         *
+         * The previous version printed twelve label and value rows at identical weight, so the
+         * order number, the shoe, the address and the total all shouted equally and the thing
+         * anyone actually looks for, what was charged, sat at the bottom of the pile. This is the
+         * shape every other shop uses because it works: what you bought, what it cost, where it is
+         * going, how it was paid. The technical half is still here, one click away, where the
+         * people who want it will look.
+         */}
+        <div className="rule-b print-row flex items-center gap-4 py-4">
+          <div className="relative h-16 w-16 shrink-0 border border-rule bg-plate">
+            <Image
+              src={plateSrc(colourway.id, 'lateral')}
+              alt=""
+              fill
+              sizes="64px"
+              className="object-contain p-1"
+            />
+            {/* The one easter egg that survived the redesign, moved off the big product plate and
+                onto the thing a confirmation actually shows. */}
+            <span
+              className="stamp data absolute -right-1.5 -top-1.5 border-2 bg-plate px-1 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em]"
+              style={{
+                borderColor: 'var(--color-positive)',
+                color: 'var(--color-positive)',
+                transform: 'rotate(-8deg)'
+              }}
+            >
+              Yours
+            </span>
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold leading-tight">
+              {PRODUCT.brand} {PRODUCT.name}
+            </div>
+            <div className="note">
+              {colourway.name} · {size ?? '—'} · Qty 1
+            </div>
+            <div className="note">{colourway.ref}</div>
+          </div>
+        </div>
+
         <dl>
-          {rows.map((r, i) => (
+          {money.map((r, i) => (
             <div
               key={r.label}
-              className="rule-b print-row flex items-baseline justify-between gap-6 py-2"
+              className="print-row flex items-baseline justify-between gap-6 py-1"
               style={{ animationDelay: `${i * 55}ms` }}
             >
-              <dt className="label">{r.label}</dt>
+              <dt className="text-sm text-muted">{r.label}</dt>
               <dd className={`${r.mono ? 'data' : ''} text-right text-sm`}>{r.value}</dd>
             </div>
           ))}
         </dl>
 
         <div
-          className="print-row flex items-baseline justify-between gap-6 pt-3"
-          style={{ animationDelay: `${rows.length * 55}ms` }}
+          className="rule-t print-row mt-2 flex items-baseline justify-between gap-6 pt-3"
+          style={{ animationDelay: `${money.length * 55}ms` }}
         >
-          <span className="label">Total charged</span>
+          <span className="text-base font-semibold">Total charged</span>
           <span className="text-right">
-            <span className="data block text-lg font-semibold">{usd(totalCharged)}</span>
+            <span className="data block text-xl font-semibold">{usd(totalCharged)}</span>
             {tokenTotal && <span className="data block text-xs text-muted">{tokenTotal}</span>}
           </span>
         </div>
@@ -170,6 +183,34 @@ export function Receipt({
               : ''}
           </p>
         )}
+
+        <div className="rule-t mt-5 grid gap-5 pt-4 sm:grid-cols-2">
+          <div>
+            <div className="label mb-1.5">Delivering to</div>
+            {address.name && <div className="text-sm">{address.name}</div>}
+            {address.line1 && <div className="note">{formatAddress(address)}</div>}
+            <div className="note mt-1">Free delivery, 2 to 4 days</div>
+          </div>
+
+          <div>
+            <div className="label mb-1.5">Paid with</div>
+            <div className="text-sm">
+              {p.symbol ?? PRODUCT.settlement.symbol} from {order.source?.name ?? 'your account'}
+            </div>
+            <div className="note">
+              Sent on {p.networkName ?? PRODUCT.settlement.network}
+            </div>
+            {order.funding
+              .filter(f => f.type !== 'existingCryptocurrencyBalance')
+              .map(f => (
+                <div key={f.type} className="note mt-1">
+                  {describeFundingType(f.type)}{' '}
+                  {f.amountInCrypto ? `${token(f.amountInCrypto)} ` : ''}
+                  {f.symbol}
+                </div>
+              ))}
+          </div>
+        </div>
 
         <button
           type="button"
