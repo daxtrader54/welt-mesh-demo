@@ -51,44 +51,6 @@ export function FailureNotice({
   )
 }
 
-/**
- * Sandbox has to be unmistakable, and it has to stay on screen through the payment step.
- *
- * This is not decoration. During the build probe, real Coinbase credentials were typed into the
- * Mesh sandbox login by mistake, and the confirmation code was not to hand at the point Link
- * asked for it. If that can happen to the person building it, it will happen to someone watching
- * a demo.
- */
-export function SandboxNotice({ compact = false }: { compact?: boolean }) {
-  return (
-    <div
-      className={`border border-rule bg-plate ${compact ? 'px-4 py-3' : 'p-5'}`}
-      style={{ borderLeft: '3px solid var(--color-warn)' }}
-    >
-      <p className="text-sm font-semibold" style={{ color: 'var(--color-warn)' }}>
-        Mesh sandbox. Do not use real exchange credentials.
-      </p>
-      <p className="mt-1 text-sm">Sign in with the test account below.</p>
-      <dl className="data mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
-        <div className="flex gap-2">
-          <dt className="label">User</dt>
-          <dd>Mesh</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="label">Pass</dt>
-          <dd>Pass123</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="label">Code</dt>
-          <dd>123456</dd>
-        </div>
-      </dl>
-      <p className="note mt-2">
-        The same code is asked for again when you confirm the payment.
-      </p>
-    </div>
-  )
-}
 
 /**
  * The disclaimer, which is entirely true and also the only place in the build allowed to enjoy

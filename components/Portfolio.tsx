@@ -223,9 +223,7 @@ export function Portfolio({
         <details className="rule-t mt-5 pt-3">
           <summary className="flex cursor-pointer items-baseline justify-between gap-4 list-none">
             <span className="label">Also held ({rest.length})</span>
-            <span className="note underline underline-offset-2">
-              {usd(rest.reduce((t, p) => t + (p.marketValue ?? 0), 0))} more in this account
-            </span>
+            <span className="note underline underline-offset-2">Show</span>
           </summary>
 
           <ul className="mt-3">
