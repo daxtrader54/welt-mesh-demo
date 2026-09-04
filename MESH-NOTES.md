@@ -157,6 +157,44 @@ the documented response example** and we have not observed it. Treat it as optio
 
 ---
 
+## What a shopper can and cannot choose
+
+The single most misread thing about this integration, and the one that generated the most confusion
+building it. There are two questions and they look like one.
+
+**What the merchant is paid in.** The merchant's decision, set in `toAddresses`, fixed before the
+shopper arrives. Ours is three stablecoins to an Ethereum address, so native BTC could never be on
+that list whatever anyone wanted: the address is an Ethereum address.
+
+**What the payment is funded from.** Nobody's decision. **Mesh's link token has no field for it**,
+verified against the OpenAPI spec and the prose docs. A merchant cannot set it and therefore cannot
+offer the shopper a control for it either. Mesh works it out at payment time: it spends the balance
+in the collected asset, and converts another holding only when that balance is short.
+
+So a picker on a merchant's page listing the assets it accepts will be read by shoppers as "what I
+pay with". It is not, and ours was labelled that way for a while. A shopper holding $398,000 of BTC
+asked, entirely reasonably, why BTC was not one of the options. Label that control for what it does.
+
+The practical consequence: **an account that holds enough of the collected asset will never
+demonstrate conversion**, because there is nothing to convert. Measured, from a real run:
+
+```
+USDC   eligible=true withFunding=false
+USDT   eligible=true withFunding=false
+PYUSD  eligible=true withFunding=false
+```
+
+`withFunding=false` against an account holding 9,097 USDC and $398,000 of BTC. Not a restriction,
+the absence of a problem. To see conversion at all you need an account short of the collected asset,
+which in sandbox means `MeshBTC`.
+
+**Unverified, and it is the crux.** Mesh's payment sheet shows an `Account` row and a `Pay with`
+row. Whether the second is tappable, and therefore whether a shopper can pick their funding asset
+inside Link even though a merchant cannot offer it, we never established. It needs a browser
+mid-payment. If it does open, that is where the choice lives and a checkout should point at it.
+
+---
+
 ## Conversion and SmartFunding
 
 `CryptocurrencyFundingOptionType` has seven values, four of them conversion. Documented as an enum;
@@ -317,6 +355,26 @@ JSON re-serialised refused. If that passes and settlement still does not appear,
 
 ---
 
+## What a full run looks like
+
+For calibration, from a settled run measured end to end:
+
+```
+link token           144ms
+holdings/get + value 766ms      14 positions
+quote x3             866ms
+configure            696ms
+link token (payment) 223ms
+webhook -> settled   found on poll 5, ~15s after transferCompleted
+```
+
+Connect to `integrationConnected` was about 20 seconds including a human typing an MFA code, and
+`pageLoaded` to `transferCompleted` on the payment session about 11 seconds. Seven manifest rows,
+twelve SDK events, seven server calls. Budget a minute for a live demo run including reading the
+screens, and remember the sandbox MFA prompt appears twice.
+
+---
+
 ## Things we could not find out
 
 - What any of the seven `CryptocurrencyFundingOptionType` values formally mean.
@@ -326,3 +384,5 @@ JSON re-serialised refused. If that passes and settlement still does not appear,
 - Whether conversion fires when the shopper holds none of the destination asset.
 - Which brokers support conversion, and whether the sandbox does at all.
 - Whether the shopper sees a conversion choice or Mesh simply routes it.
+- Whether the `Pay with` row on Mesh's payment sheet is tappable, which decides whether a shopper
+  has any say in the funding asset at all.
