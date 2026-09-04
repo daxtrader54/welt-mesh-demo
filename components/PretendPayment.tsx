@@ -42,7 +42,8 @@ export function PretendPaymentModal({
         role="dialog"
         aria-modal="true"
         aria-label={isApple ? 'Apple Pay' : 'Card payment'}
-        className="stamp relative w-full max-w-md border border-rule bg-plate p-6 sm:w-auto sm:min-w-[26rem]"
+        style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+        className="stamp relative w-full max-w-md border border-rule bg-plate p-6 sm:mb-0 sm:w-auto sm:min-w-[26rem]"
       >
         <div className="rule-b flex items-center justify-between pb-3">
           <span className="text-base font-semibold">{isApple ? 'Apple Pay' : 'Pay by card'}</span>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapProviders } from './providers'
+import { mapProviders, suggestProvider } from './providers'
 
 /**
  * Fixtures trimmed from real sandbox responses. The shapes differ between the two endpoints on
@@ -77,5 +77,57 @@ describe('mapProviders', () => {
   it('does not claim a provider can pay when it lacks the settlement asset', () => {
     const noUsdc = [{ ...CAPABLE[0]!, networks: [{ ...ethereum, supportedTokens: ['ETH'] }] }]
     expect(mapProviders(noUsdc, OFFERED, SETTLEMENT)[0]!.canPay).toBe(false)
+  })
+})
+
+/**
+ * The default the checkout deep-links Link to. A tester who does not own crypto hit Mesh's full
+ * catalogue and could not tell which entry was for them, so the merchant now names one.
+ */
+describe('suggesting a provider', () => {
+  const all = () => mapProviders(CAPABLE, OFFERED, SETTLEMENT)
+
+  it('picks one that can settle here and that Link will actually offer', () => {
+    const s = suggestProvider(all())
+    expect(s).not.toBeNull()
+    const chosen = all().find(p => p.id === s!.id)!
+    expect(chosen.canPay).toBe(true)
+    expect(chosen.sandboxAvailable).toBe(true)
+  })
+
+  it('never suggests a wallet that cannot reach the merchant network', () => {
+    const wallets = all().filter(p => !p.canPay).map(p => p.id)
+    expect(wallets).not.toContain(suggestProvider(all())!.id)
+  })
+
+  it('returns null rather than guessing when nothing is usable', () => {
+    expect(suggestProvider(mapProviders(CAPABLE, [], SETTLEMENT))).toBeNull()
+    expect(suggestProvider([])).toBeNull()
+  })
+})
+
+/**
+ * The catalogue's own order is an accident. Sandbox Binance is typed `sandbox` and named
+ * "Binance", so sorting alphabetically put it above Coinbase and the checkout deep-linked Link to
+ * Binance, which is not the account the demo runs on.
+ */
+describe('the merchant ranking', () => {
+  it('puts Coinbase above Binance even though B sorts first', () => {
+    const ordered = mapProviders(CAPABLE, OFFERED, SETTLEMENT)
+    const names = ordered.map(p => p.name)
+    expect(names.indexOf('Coinbase')).toBeLessThan(names.indexOf('Binance'))
+    expect(suggestProvider(ordered)!.name).toBe('Coinbase')
+  })
+
+  it('still puts usable-here above the merchant ranking', () => {
+    // Coinbase drops out of what Link offers; Binance is then the only usable entry and wins,
+    // because a preferred provider nobody can pick with is worse than a working one.
+    const withoutCoinbase = OFFERED.filter(o => o.type !== 'sandboxCoinbase')
+    const s = suggestProvider(mapProviders(CAPABLE, withoutCoinbase, SETTLEMENT))
+    expect(s!.name).toBe('Binance')
+  })
+
+  it('suggests the sandbox Coinbase id, not one of the production variants', () => {
+    expect(suggestProvider(mapProviders(CAPABLE, OFFERED, SETTLEMENT))!.id).toBe('a1')
   })
 })

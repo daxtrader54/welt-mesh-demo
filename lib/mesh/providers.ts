@@ -1,3 +1,5 @@
+import { providerRank } from '@/lib/product'
+
 /**
  * Turning two Mesh catalogues into one answer.
  *
@@ -70,6 +72,25 @@ export function mapProviders(
       (a, b) =>
         Number(b.canPay && b.sandboxAvailable) - Number(a.canPay && a.sandboxAvailable) ||
         Number(b.canPay) - Number(a.canPay) ||
+        // The merchant's ranking before the alphabet. Alphabetical alone put Binance above
+        // Coinbase, which then became the provider the checkout deep-linked to.
+        providerRank(a.name) - providerRank(b.name) ||
         a.name.localeCompare(b.name)
     )
+}
+
+/**
+ * Which provider the checkout should open Link on.
+ *
+ * Mesh's picker is the whole catalogue, and that is right for the breadth argument and wrong as a
+ * default: a shopper who does not own crypto reads a list containing MetaMask and self-custody
+ * wallets as a question they cannot answer. A tester did exactly that.
+ *
+ * So the merchant picks a default and the catalogue stays one click away. "Usable here" is the
+ * only rule: can settle the merchant's asset on the merchant's network, and Link will actually
+ * offer it. Nothing is hardcoded, so this follows the catalogue rather than a name in the source.
+ */
+export function suggestProvider(providers: Provider[]): { id: string; name: string } | null {
+  const best = providers.find(p => p.canPay && p.sandboxAvailable)
+  return best ? { id: best.id, name: best.name } : null
 }

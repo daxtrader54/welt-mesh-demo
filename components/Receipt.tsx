@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { token, truncate, usd } from '@/lib/format'
 import { HANDLING_FEE, PRODUCT, type Colourway } from '@/lib/product'
-import type { OrderState } from '@/lib/order/state'
+import { chargedTotal, meshTotalDisagrees, type OrderState } from '@/lib/order/state'
+import { formatAddress, type Address } from './Delivery'
 
 /**
  * The receipt prints. One easter egg, and it earns its place because the spec-sheet direction
@@ -19,32 +20,23 @@ export function Receipt({
   orderId,
   size,
   colourway,
+  address,
   settled
 }: {
   order: OrderState
   orderId: string | null
   size: string | null
   colourway: Colourway
+  address: Address
   settled: boolean
 }) {
   const [expanded, setExpanded] = useState(false)
   const p = order.payment
 
-  /**
-   * Add up what the customer was actually charged.
-   *
-   * `totalAmountInFiat` from Mesh is not reliable for this: the same transfer showed $50.01 in
-   * the Link overlay and returned 50 in the completion payload, and earlier runs returned 50.01
-   * in that field. The fee breakdown on `transferPreviewed` has been consistent every time, so
-   * the arithmetic is the honest source and Mesh's own figure is shown beside it when they differ.
-   */
-  const fees = (order.fees.institution ?? 0) + (order.fees.client ?? 0) + (order.fees.gas ?? 0)
-  const computedTotal = p.amount !== null ? p.amount + fees : null
-  const totalCharged = computedTotal ?? p.totalAmountInFiat ?? PRODUCT.price
-  const meshDisagrees =
-    p.totalAmountInFiat !== null &&
-    computedTotal !== null &&
-    Math.abs(p.totalAmountInFiat - computedTotal) > 0.0001
+  // Both numbers come from lib/order/state, so the headline on the page and the total on the
+  // receipt cannot drift apart again.
+  const totalCharged = chargedTotal(order, PRODUCT.price + HANDLING_FEE)
+  const meshDisagrees = meshTotalDisagrees(order, PRODUCT.price + HANDLING_FEE)
 
   const rows: { label: string; value: string; mono?: boolean }[] = [
     { label: 'Item', value: `${PRODUCT.brand} ${PRODUCT.name}` },
@@ -73,6 +65,10 @@ export function Receipt({
     { label: 'Paid with', value: p.symbol ?? PRODUCT.settlement.symbol },
     { label: 'Network', value: p.networkName ?? PRODUCT.settlement.network },
     { label: 'From', value: order.source?.name ?? '—' },
+    // Never left the browser, so it prints from local state rather than from the order record.
+    ...(address.name ? [{ label: 'Deliver to', value: address.name }] : []),
+    ...(address.line1 ? [{ label: 'Address', value: formatAddress(address) }] : []),
+    { label: 'Delivery', value: 'Free · 2 to 4 days' },
     { label: 'Status', value: settled ? 'Settled' : 'Paid' }
   ]
 

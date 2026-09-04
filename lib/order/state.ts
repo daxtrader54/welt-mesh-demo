@@ -132,6 +132,11 @@ export function initialOrderState(): OrderState {
 
 export type OrderEvent =
   | { type: 'connect:started'; at: number }
+  /**
+   * A returning shopper whose stored connection is being reused. No Link session opens, so no SDK
+   * event will ever stamp this row and it has to be stamped here instead.
+   */
+  | { type: 'connect:reused'; at: number; institution: string | null }
   | { type: 'holdings:done'; at: number; institution: string | null; usdc: number | null; positions: number }
   | { type: 'holdings:failed'; at: number; failure: Failure }
   | { type: 'pay:started'; at: number }
@@ -170,6 +175,19 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
         failure: null,
         warning: null,
         steps: activate(state.steps, 'connected')
+      }
+
+    case 'connect:reused':
+      return {
+        ...state,
+        status: 'connecting',
+        failure: null,
+        warning: null,
+        steps: mark(state.steps, 'connected', 'done', action.at, [
+          { label: 'Provider', value: action.institution ?? '—' },
+          { label: 'Source', value: 'Stored connection' },
+          { label: 'Sign-in', value: 'Skipped' }
+        ])
       }
 
     case 'holdings:done':
@@ -547,4 +565,30 @@ export function describeExitPage(page: string | undefined): string | null {
     transferMfaPage: 'at the confirmation code'
   }
   return map[page] ?? null
+}
+
+/**
+ * What the customer's account was actually debited.
+ *
+ * One function, because this used to be worked out in two places that disagreed. The confirmation
+ * headline read Mesh's `totalAmountInFiat` and said $50.00; the receipt added the amount and the
+ * fees and said $50.01. Both were on screen at once.
+ *
+ * `totalAmountInFiat` is not trustworthy for this. The same transfer showed $50.01 in the Link
+ * overlay and returned 50 in the completion payload, and earlier runs returned 50.01 in that same
+ * field. The fee breakdown on `transferPreviewed` has been consistent every time, so the
+ * arithmetic wins and Mesh's own figure is shown beside it when the two disagree.
+ */
+export function chargedTotal(order: OrderState, fallback: number): number {
+  const { amount } = order.payment
+  if (amount === null) return order.payment.totalAmountInFiat ?? fallback
+  const fees = (order.fees.institution ?? 0) + (order.fees.client ?? 0) + (order.fees.gas ?? 0)
+  return amount + fees
+}
+
+/** True when Mesh's own total contradicts the arithmetic, which is worth showing rather than hiding. */
+export function meshTotalDisagrees(order: OrderState, fallback: number): boolean {
+  const reported = order.payment.totalAmountInFiat
+  if (reported === null || order.payment.amount === null) return false
+  return Math.abs(reported - chargedTotal(order, fallback)) > 0.0001
 }

@@ -34,7 +34,8 @@ export function AddedToBag({
       <div
         role="dialog"
         aria-label="Added to bag"
-        className="stamp relative w-full border border-rule bg-plate p-5 sm:w-[24rem]"
+        style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
+        className="stamp relative w-full border border-rule bg-plate p-5 sm:mb-0 sm:w-[24rem]"
       >
         <div className="flex items-center gap-2">
           <span

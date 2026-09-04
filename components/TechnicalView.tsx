@@ -127,7 +127,10 @@ export function ConsoleBar({
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      className={`group fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-4 border-t-2 border-ink bg-plate px-4 py-2 transition-colors hover:bg-ground sm:gap-5 sm:px-16 ${className}`}
+      /* The bottom inset keeps the tap target clear of iOS Safari's toolbar and the home
+         indicator, which were sitting on top of it. */
+      style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
+      className={`group fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-4 border-t-2 border-ink bg-plate px-4 pt-2 transition-colors hover:bg-ground sm:gap-5 sm:px-16 ${className}`}
     >
       <span className="flex shrink-0 items-center gap-2">
         <span
@@ -557,7 +560,8 @@ export function TechnicalView({
       {/* A sheet, not a takeover. Full height on a phone meant the shop disappeared behind the
           panel and there was no way to see what the events were about. */}
       <aside
-        className="fixed inset-x-0 bottom-0 z-50 flex max-h-[72vh] flex-col border-t-2 border-ink shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-md sm:border-l sm:border-t-0 sm:border-rule"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="fixed inset-x-0 bottom-0 z-50 flex max-h-[72dvh] flex-col border-t-2 border-ink shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-md sm:border-l sm:border-t-0 sm:border-rule sm:pb-0"
         role="dialog"
         aria-modal="true"
         aria-label="Behind the payment"

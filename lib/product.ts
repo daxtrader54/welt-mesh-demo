@@ -118,3 +118,22 @@ export const ANNOTATED_PLATES: PlateId[] = ['outsole', 'top']
 export function colourway(id: ColourwayId): Colourway {
   return COLOURWAYS.find(c => c.id === id) ?? COLOURWAYS[0]!
 }
+
+/**
+ * The merchant's own ranking of payment providers, best first.
+ *
+ * Ordering the catalogue alphabetically put Binance at the top, because the sandbox's Binance
+ * entry is typed `sandbox` and named "Binance". That is an accident of the catalogue, not a
+ * merchant decision, and it decided which provider the checkout opened Link on.
+ *
+ * Matched on the brand name, not the integration type: a merchant ranks Coinbase, not
+ * `sandboxCoinbase`, `coinbase` and `coinbaseRamp` separately. Anything not listed keeps its
+ * alphabetical place after the ones that are.
+ */
+export const PREFERRED_PROVIDERS = ['coinbase', 'binance', 'kraken', 'robinhood'] as const
+
+/** Lower is better. Unlisted providers all share the same rank and fall back to alphabetical. */
+export function providerRank(name: string): number {
+  const i = PREFERRED_PROVIDERS.indexOf(name.trim().toLowerCase() as (typeof PREFERRED_PROVIDERS)[number])
+  return i === -1 ? PREFERRED_PROVIDERS.length : i
+}

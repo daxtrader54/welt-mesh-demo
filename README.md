@@ -27,13 +27,15 @@ listing structure came from. No orders are fulfilled.
 1. **Listing.** Four colourways, which are four real SKUs with their own supplier references.
 2. **Product.** Colour, size, add to bag. Reviews, delivery and spec, as a shop has.
 3. **Bag.** Line item, summary, savings off RRP, checkout securely.
-4. **Checkout.** Card and Apple Pay open real-looking sheets that then say they are for show. The
+4. **Delivery.** Name, email and address, because a checkout that jumps from bag to payment is not
+   one anyone recognises. It never leaves the browser.
+5. **Checkout.** Card and Apple Pay open real-looking sheets that then say they are for show. The
    crypto option opens a Mesh Link session that connects an account and stops.
-5. **Portfolio.** Everything in the connected account, with Mesh's own answer on which of it can pay
+6. **Portfolio.** Everything in the connected account, with Mesh's own answer on which of it can pay
    for this order and where the money would come from. Pick one.
-6. **Pay.** A second Link session carries the payment, deep-linked to the account already connected
+7. **Pay.** A second Link session carries the payment, deep-linked to the account already connected
    so nobody is asked to choose twice. **Change account** puts the picker back.
-7. **Confirmation.** The receipt prints, the bag empties, the product says *Yours*. A verified
+8. **Confirmation.** The receipt prints, the bag empties, the product says *Yours*. A verified
    webhook later upgrades **paid** to **settled**.
 
 Alongside it, a payment trace: seven rows, each stamped by a real Mesh event with the time it
@@ -81,7 +83,7 @@ which variables are present, without values, and whether the store is Redis or m
 ### Scripts
 
 ```bash
-npm test                                    # 62 tests, no secrets, under a second
+npm test                                    # 72 tests, no secrets, under a second
 npm run typecheck
 node scripts/webhook-check.mjs <url>        # prove the webhook endpoint without waiting for Mesh
 node scripts/crop-product-images.mjs        # re-frame the photographs from public/product-src
@@ -114,7 +116,7 @@ app/
   api/mesh/connection          takes custody of the auth token; reports an existing one
   api/mesh/portfolio           holdings, normalised
   api/mesh/quotes              per-asset eligibility, fees and funding sources
-  api/mesh/providers           who could fund this, and who Link will offer
+  api/mesh/providers           who could fund this, who Link will offer, and which to default to
   api/mesh/webhook             raw body, HMAC, idempotent settlement
   api/orders/[id]              order state, owned by the session that created it
   api/session/reset            clears the order, keeps the connection
@@ -259,7 +261,7 @@ does not appear, nothing arrived.
 
 ## For the merchant's engineer
 
-**Yours:** six route handlers, one of them a webhook. A key/value store for the order and for webhook
+**Yours:** seven route handlers, one of them a webhook. A key/value store for the order and for webhook
 idempotency. A page that reacts to SDK events. That is the whole integration.
 
 **Mesh's:** the provider catalogue, OAuth and MFA for every exchange, asset and network eligibility,
@@ -293,13 +295,27 @@ someone holds before asking them to pay means connecting first and paying second
 Link session and an extra click. *Bought:* the portfolio, which is what shows Mesh does more than
 move money, and the ability to price the payment before anyone commits.
 
-**The picker on connect, deep-link on pay.** The connect session shows Mesh's catalogue because
-choosing a provider is the shopper's decision and it is the breadth argument. The payment session is
-deep-linked to whatever they connected, because being asked the same question twice in one checkout
-reads as a bug. **Change account** drops the deep-link and puts the picker back. *Tradeoff:* the
-sandbox picker offers three self-custody wallets that hold testnet assets only, so they cannot reach
-Ethereum mainnet. They are labelled before they are picked and produce designed failures when they
-are. `MESH_COINBASE_INTEGRATION_ID` removes the picker entirely if a merchant wants that.
+**A named default, with the catalogue one click away.** The connect session used to open Mesh's
+full catalogue, and a tester who does not own crypto could not tell which of MetaMask, Phantom and
+Rainbow was for them. So the checkout names a provider and deep-links to it: *Pay with Coinbase*,
+with *Use a different exchange or wallet* underneath, which opens the whole catalogue. The name is
+never hardcoded. `/api/mesh/providers` ranks the live catalogue by what can actually settle here
+and returns the top entry, so the button follows the catalogue rather than a string in the source.
+*Tradeoff:* the breadth argument is now one click in rather than the default, which is the right
+trade when the default costs a shopper the checkout.
+
+**The merchant ranks providers, not the alphabet.** Ranking alphabetically put Binance first,
+because the sandbox's Binance entry is typed `sandbox` and named "Binance". That accident then
+decided which provider the checkout deep-linked to. `PREFERRED_PROVIDERS` in `lib/product.ts` is
+the merchant's own order, applied after "can actually settle here", so an unusable favourite never
+outranks a working provider. Matched on brand name, because a merchant ranks Coinbase, not
+`sandboxCoinbase`, `coinbase` and `coinbaseRamp` separately.
+
+**Deep-link on pay too.** The payment session goes straight to whatever they connected, because
+being asked the same question twice in one checkout reads as a bug. **Change account** drops the
+deep-link and puts the picker back. *Tradeoff:* the sandbox catalogue offers three self-custody
+wallets that hold testnet assets only, so they cannot reach Ethereum mainnet. They are labelled
+before they are picked and produce designed failures when they are.
 
 **Three stablecoins, not one, and not ETH.** The merchant accepts USDC, USDT and PYUSD to the same
 address, and the shopper chooses. Mesh's own guidance is to offer every destination you can, so a
@@ -337,6 +353,27 @@ skips the exchange login. It never calls Mesh's remove-connection endpoint, whic
 a token id with no way back. *Tradeoff:* a genuinely fresh session needs a new browser profile, which
 is the right cost for the rarer case.
 
+**Holding a token is not the same as having chosen how to pay.** The two were one flag, so a
+returning shopper, whose connection survives the reset by design, was dropped into a crypto-only
+checkout with card and Apple Pay gone. Worse, nothing read their account: the portfolio was only
+ever fetched from the SDK's connect callback, which never fires for someone already connected, so
+the checkout sat on *Reading your account* and stayed there. The read is now its own function with
+two callers, and the second runs when a returning shopper picks the crypto route. No Link session
+opens at all for them, which makes the second purchase one click.
+
+**The delivery address never leaves the browser.** Name, email and address are collected because a
+checkout without them is not recognisable as one, and they are kept in `sessionStorage` and read
+straight onto the receipt. Nothing is posted to a route, written to Redis or sent to Mesh. Nothing
+ships, so collecting real postal addresses on a public demo would be storing personal data for no
+reason. *Cost:* the address is gone when the tab closes, which for a demo is the right lifetime.
+A **Fill in a sample address** button means a live demo is never someone typing a postcode.
+
+**One function decides what the customer was charged.** The confirmation headline read Mesh's
+`totalAmountInFiat` and said $50.00 while the receipt added the amount and the fees and said
+$50.01, both on the same screen. `chargedTotal` in `lib/order/state.ts` is now the only answer, and
+it is the arithmetic, because that field has returned both 50 and 50.01 for the same transfer.
+Mesh's own figure is still shown beside it when the two disagree.
+
 **The order id is a UUID; the reference is a label.** They used to be one string, a 32-bit hash
 reduced modulo 10,000, which was simultaneously the display number, the store key and Mesh's
 `transactionId`. Even odds of a collision after 118 orders, and a collision settled the wrong order.
@@ -345,6 +382,12 @@ reduced modulo 10,000, which was simultaneously the display number, the store ke
 **Embedded above 1024px, overlay below.** Embedded puts the payment inside the checkout column, which
 is the better experience and the one Mesh's polish guide is written for. It does not survive a phone:
 the frame loads, fires `pageLoaded`, and renders white.
+
+**The phone gets less of it.** `viewport-fit=cover` plus `env(safe-area-inset-bottom)` on the
+console bar, both bottom sheets and the drawer, because on iOS Safari they sat under the browser's
+own toolbar and their buttons were hard to hit. The seven-row payment trace collapses to a count on
+a narrow screen: the right amount of detail beside a desktop checkout, a wall underneath a 390px
+one.
 
 **No state management library.** One reducer over SDK events produces the order status, the manifest
 and the receipt, and it is the most tested thing here because it is where a regression would cost
@@ -398,8 +441,9 @@ the checkout down. Event payloads and error strings render as text, never as HTM
 cannot lock out an honest client, and failing open so a store outage can never be the reason someone
 cannot pay.
 
-**Minimal data.** No accounts, no login, no personal data. One opaque session id in an httpOnly
-cookie, and TTLs on everything.
+**Minimal data.** No accounts, no login, no personal data on the server. One opaque session id in
+an httpOnly cookie, and TTLs on everything. The delivery address is collected in the browser and
+stays there: no route receives it, nothing stores it, and it dies with the tab.
 
 ---
 
@@ -429,10 +473,11 @@ Three that are non-obvious:
 
 ## Testing
 
-62 tests over the logic where a regression costs something: webhook HMAC verification including the
+72 tests over the logic where a regression costs something: webhook HMAC verification including the
 re-serialisation trap, `EventId` idempotency, both link token builders, the merchant fee ratio and the
-guarantee it never changes the destination amount, the provider catalogue mapping, the event to order
-reducer, and money formatting. Runs in under a second, needs no secrets.
+guarantee it never changes the destination amount, the provider catalogue mapping and the merchant
+ranking on top of it, what the customer was actually charged, the event to order reducer, and money
+formatting. Runs in under a second, needs no secrets.
 
 The reducer fixtures are trimmed copies of real sandbox payloads, including two failures that actually
 happened: a wallet not present on the device, and an account with nothing eligible.

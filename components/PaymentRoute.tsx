@@ -1,5 +1,6 @@
 'use client'
 
+import { useState } from 'react'
 import { clockTime, token, usd } from '@/lib/format'
 import { PRODUCT } from '@/lib/product'
 import type { OrderState } from '@/lib/order/state'
@@ -107,6 +108,14 @@ const STATE_MARK: Record<string, string> = {
  */
 export function Manifest({ order }: { order: OrderState }) {
   const done = order.steps.filter(s => s.state === 'done').length
+  /**
+   * Collapsed on a phone, open on anything wider.
+   *
+   * Seven rows of label, facts and timestamp is a reasonable block on a desktop and a wall under a
+   * checkout on a 390px screen, which is what testers meant by busy. The count in the header is
+   * the part that matters at a glance; the rows are there when someone wants them.
+   */
+  const [expanded, setExpanded] = useState(false)
 
   return (
     <section className="rule-t mt-14 pt-6">
@@ -123,7 +132,16 @@ export function Manifest({ order }: { order: OrderState }) {
         </span>
       </div>
 
-      <ol className="rule-t">
+      <button
+        type="button"
+        onClick={() => setExpanded(v => !v)}
+        aria-expanded={expanded}
+        className="btn-quiet mb-3 md:hidden"
+      >
+        {expanded ? 'Hide the steps' : `Show all ${order.steps.length} steps`}
+      </button>
+
+      <ol className={`rule-t ${expanded ? '' : 'hidden md:block'}`}>
         {order.steps.map((step, i) => {
           const isDone = step.state === 'done'
           const failed = step.state === 'failed'
@@ -148,7 +166,11 @@ export function Manifest({ order }: { order: OrderState }) {
                 >
                   {STATE_MARK[step.state]}
                 </span>
-                <span className={`w-48 shrink-0 text-sm ${isDone || failed ? 'font-medium' : ''}`}>
+                <span
+                  className={`min-w-0 flex-1 text-sm md:w-48 md:flex-none md:shrink-0 ${
+                    isDone || failed ? 'font-medium' : ''
+                  }`}
+                >
                   {step.label}
                 </span>
 
@@ -176,7 +198,7 @@ export function Manifest({ order }: { order: OrderState }) {
         })}
       </ol>
 
-      <p className="note mt-3">
+      <p className={`note mt-3 ${expanded ? '' : 'hidden md:block'}`}>
         Transaction references and provider identifiers are in Behind the payment.
       </p>
 

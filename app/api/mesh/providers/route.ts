@@ -1,7 +1,12 @@
 import { meshEnv } from '@/lib/env'
 import { guard, ok } from '@/lib/http'
 import { PRODUCT } from '@/lib/product'
-import { mapProviders, type MeshIntegration, type OfferedIntegration } from '@/lib/mesh/providers'
+import {
+  mapProviders,
+  suggestProvider,
+  type MeshIntegration,
+  type OfferedIntegration
+} from '@/lib/mesh/providers'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -51,9 +56,6 @@ export async function GET() {
     const offeredJson = offered.ok
       ? ((await offered.json()) as { content?: { items?: OfferedIntegration[] } })
       : null
-    const offeredTypes = new Set(
-      (offeredJson?.content?.items ?? []).map(i => (i.type ?? '').toLowerCase()).filter(Boolean)
-    )
 
     const providers = mapProviders(
       integrations,
@@ -65,8 +67,17 @@ export async function GET() {
       }
     )
 
+    /**
+     * Who the checkout should open Link on by default.
+     *
+     * mapProviders already sorts usable-here first, so this is the top of the list. It matters
+     * because Mesh's picker is the whole catalogue, and a shopper who does not hold crypto reads a
+     * list containing MetaMask and self-custody wallets as a question they cannot answer. A tester
+     * did exactly that. The merchant picks a sensible default; the catalogue stays one click away.
+     */
     return ok({
       providers,
+      suggested: suggestProvider(providers),
       eligible: providers.filter(p => p.canPay).length,
       total: providers.length,
       asset: PRODUCT.settlement.symbol,

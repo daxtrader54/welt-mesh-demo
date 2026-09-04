@@ -103,7 +103,7 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
   const open = useCallback(
     async (
       intent: OpenIntent,
-      selection?: { colourway?: string; size?: string; integrationId?: string }
+      selection?: { colourway?: string; size?: string; integrationId?: string; asset?: string }
     ) => {
       if (inFlight.current) return
       inFlight.current = true

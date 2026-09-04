@@ -4,7 +4,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import type { LinkEventType, LinkPayload, TransferFinishedPayload } from '@meshconnect/web-link-sdk'
 import { failure, type Failure } from '@/lib/failure'
 import { usd } from '@/lib/format'
-import { describeExitPage, initialOrderState, reduceOrder } from '@/lib/order/state'
+import { chargedTotal, describeExitPage, initialOrderState, reduceOrder } from '@/lib/order/state'
 import {
   BRAND,
   DEFAULT_COLOURWAY,
@@ -17,6 +17,13 @@ import {
 } from '@/lib/product'
 import { AddedToBag, BagView, type BagItem } from './Bag'
 import { ColourwayPicker, PriceBlock, SizePicker } from './Checkout'
+import {
+  DeliveryForm,
+  DeliverySummary,
+  EMPTY_ADDRESS,
+  isComplete,
+  type Address
+} from './Delivery'
 import { FundingNote } from './FundingPicker'
 import { FailureNotice, Footer, SandboxNotice } from './Notices'
 import { FundingSource, Manifest, type Funding } from './PaymentRoute'
@@ -48,7 +55,7 @@ import { LINK_FRAME_ID, preloadMeshLink, useMeshLink } from './useMeshLink'
  * actually funds it comes back on `transferPreviewed` and ends up on the receipt.
  */
 
-type Step = 'shop' | 'product' | 'bag' | 'checkout' | 'done'
+type Step = 'shop' | 'product' | 'bag' | 'delivery' | 'checkout' | 'done'
 
 export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const [step, setStep] = useState<Step>('shop')
@@ -86,7 +93,27 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * but whose holdings could not be read was returned to the connect screen with no explanation
    * and no way forward.
    */
+  /**
+   * Name and address. Client side only, and deliberately: nothing ships, so collecting real
+   * postal addresses on a public demo would be storing personal data for no reason. See
+   * components/Delivery.tsx.
+   */
+  const [address, setAddress] = useState<Address>(EMPTY_ADDRESS)
+  /**
+   * The provider the checkout opens Link on by default, from the live catalogue. Never hardcoded:
+   * the server picks the top usable entry and this just carries it.
+   */
+  const [suggested, setSuggested] = useState<{ id: string; name: string } | null>(null)
   const [hasConnection, setHasConnection] = useState(false)
+  /**
+   * Whether the shopper has chosen the crypto route in *this* checkout.
+   *
+   * Separate from `hasConnection` on purpose. A connection survives a reset, so on a second visit
+   * a token already exists, and treating that as "connected" dropped the returning shopper
+   * straight into a crypto-only checkout with the card and Apple Pay options gone. Holding a token
+   * is not the same as having picked how to pay.
+   */
+  const [choseCrypto, setChoseCrypto] = useState(false)
   /** The whole account, not just the line that pays. The brief calls this first-class. */
   const [positions, setPositions] = useState<Position[]>([])
   const [cryptoValue, setCryptoValue] = useState<number | null>(null)
@@ -106,6 +133,68 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   }, [])
 
   const fail = useCallback((f: Failure) => dispatch({ type: 'failed', at: Date.now(), failure: f }), [])
+
+  /**
+   * Read the connected account: holdings first, then Mesh's per-asset quotes.
+   *
+   * Its own function because two paths need it. A fresh connection calls it from
+   * `onIntegrationConnected`. A returning shopper, whose connection survived the reset, calls it
+   * when they pick the crypto route at checkout, because no SDK event fires for them. Without that
+   * second caller the checkout sat on "Reading your account" forever, which is exactly what it
+   * did.
+   */
+  const readPortfolio = useCallback(async () => {
+    try {
+      const started = Date.now()
+      const res = await fetch('/api/mesh/portfolio')
+      const json = await res.json()
+      note('GET /api/mesh/portfolio', 'POST /api/v1/holdings/get + /value', Date.now() - started, json.ok)
+
+      if (!json.ok) {
+        dispatch({ type: 'holdings:failed', at: Date.now(), failure: json.error })
+        return
+      }
+
+      setFunding({ provider: json.provider, accountName: json.accountName, settlement: json.settlement })
+      setPositions(json.positions ?? [])
+      setCryptoValue(json.cryptoValue ?? null)
+      dispatch({
+        type: 'holdings:done',
+        at: Date.now(),
+        institution: json.provider,
+        usdc: json.settlement?.amount ?? null,
+        positions: json.positions.length
+      })
+
+      // Behind the holdings, not in front of them: five Mesh calls should not stand between the
+      // shopper and the first number on screen.
+      void (async () => {
+        const qStarted = Date.now()
+        try {
+          const qres = await fetch('/api/mesh/quotes')
+          const qjson = await qres.json()
+          note('GET /api/mesh/quotes', 'POST /api/v1/transfers/managed/quote', Date.now() - qStarted, qjson.ok)
+          if (!qjson.ok) return setQuotes([])
+          setQuotes(qjson.quotes)
+          // Default to the first thing that can actually pay, preferring the settlement asset.
+          const best =
+            qjson.quotes.find((q: Quote) => q.eligible && q.primary) ??
+            qjson.quotes.find((q: Quote) => q.eligible)
+          if (best) setAsset(best.symbol)
+        } catch {
+          setQuotes([])
+        }
+      })()
+    } catch (err) {
+      dispatch({
+        type: 'holdings:failed',
+        at: Date.now(),
+        failure: failure('portfolio_failed', {
+          detail: err instanceof Error ? err.message : String(err)
+        })
+      })
+    }
+  }, [note])
 
   /** Hand the auth token to the server, then read the portfolio with it. */
   const takeConnection = useCallback(
@@ -132,63 +221,15 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         if (json.ok) {
           setConnection(json.connection)
           setHasConnection(true)
+          setChoseCrypto(true)
         }
       } catch {
         // Not fatal on its own. The portfolio read below reports the real consequence.
       }
 
-      try {
-        const started = Date.now()
-        const res = await fetch('/api/mesh/portfolio')
-        const json = await res.json()
-        note('GET /api/mesh/portfolio', 'POST /api/v1/holdings/get + /value', Date.now() - started, json.ok)
-
-        if (!json.ok) {
-          dispatch({ type: 'holdings:failed', at: Date.now(), failure: json.error })
-          return
-        }
-
-        setFunding({ provider: json.provider, accountName: json.accountName, settlement: json.settlement })
-        setPositions(json.positions ?? [])
-        setCryptoValue(json.cryptoValue ?? null)
-        dispatch({
-          type: 'holdings:done',
-          at: Date.now(),
-          institution: json.provider,
-          usdc: json.settlement?.amount ?? null,
-          positions: json.positions.length
-        })
-
-        // Behind the holdings, not in front of them: five Mesh calls should not stand between the
-        // shopper and the first number on screen.
-        void (async () => {
-          const qStarted = Date.now()
-          try {
-            const qres = await fetch('/api/mesh/quotes')
-            const qjson = await qres.json()
-            note('GET /api/mesh/quotes', 'POST /api/v1/transfers/managed/quote', Date.now() - qStarted, qjson.ok)
-            if (!qjson.ok) return setQuotes([])
-            setQuotes(qjson.quotes)
-            // Default to the first thing that can actually pay, preferring the settlement asset.
-            const best =
-              qjson.quotes.find((q: Quote) => q.eligible && q.primary) ??
-              qjson.quotes.find((q: Quote) => q.eligible)
-            if (best) setAsset(best.symbol)
-          } catch {
-            setQuotes([])
-          }
-        })()
-      } catch (err) {
-        dispatch({
-          type: 'holdings:failed',
-          at: Date.now(),
-          failure: failure('portfolio_failed', {
-            detail: err instanceof Error ? err.message : String(err)
-          })
-        })
-      }
+      await readPortfolio()
     },
-    [note]
+    [note, readPortfolio]
   )
 
   const onTransferFinished = useCallback(
@@ -293,11 +334,33 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     setJustAdded(true)
   }, [colourway, size])
 
-  const startConnect = useCallback(() => {
-    setPretend(null)
-    dispatch({ type: 'connect:started', at: Date.now() })
-    void open('connect')
-  }, [open])
+  /**
+   * The crypto route at checkout.
+   *
+   * A returning shopper already has a token on file, so there is nothing to connect: this reads
+   * their account and shows the portfolio without opening Link at all. A first-time shopper gets
+   * the connect session. `force` skips the shortcut, which is how "use a different account" works.
+   */
+  const startConnect = useCallback(
+    (force = false) => {
+      setPretend(null)
+      setChoseCrypto(true)
+      if (connection && !force) {
+        dispatch({ type: 'connect:reused', at: Date.now(), institution: connection.brokerName })
+        void readPortfolio()
+        return
+      }
+      dispatch({ type: 'connect:started', at: Date.now() })
+      /**
+       * Deep-linked to the suggested provider unless the shopper asked for the full catalogue.
+       * Mesh's picker is the breadth argument and it stays one click away, but it is the wrong
+       * default: a shopper who does not own crypto reads a list of self-custody wallets as a
+       * question they cannot answer, and a tester did.
+       */
+      void open('connect', !force && suggested ? { integrationId: suggested.id } : undefined)
+    },
+    [open, connection, readPortfolio, suggested]
+  )
 
   const startPayment = useCallback(
     (changeAccount = false) => {
@@ -379,7 +442,9 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     setDrawer(false)
     setLinkOpen(false)
     // The account stays connected on purpose, which is what makes a second run fast. Only the
-    // order and what was read for it are cleared.
+    // order and what was read for it are cleared, including the choice of how to pay, so the
+    // next checkout offers card and Apple Pay again rather than assuming crypto.
+    setChoseCrypto(false)
     setFunding(null)
     setPositions([])
     setCryptoValue(null)
@@ -426,6 +491,27 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   }, [bag])
 
   /**
+   * The delivery address, same store and the same reasoning. It stays across a reset, like the
+   * connection does, so a second run through does not mean typing an address again.
+   */
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('welt_address')
+      if (saved) setAddress({ ...EMPTY_ADDRESS, ...(JSON.parse(saved) as Partial<Address>) })
+    } catch {
+      // Nothing to recover. An empty form is the correct fallback.
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (isComplete(address)) sessionStorage.setItem('welt_address', JSON.stringify(address))
+    } catch {
+      // Private browsing can refuse. The address still works for this page view.
+    }
+  }, [address])
+
+  /**
    * A connection survives a reset by design, so on a second run one already exists. Asking once on
    * load is what lets the checkout offer "connected" instead of walking someone through a
    * connection they already made.
@@ -450,6 +536,21 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     if (step === 'checkout') void preloadMeshLink()
   }, [step])
 
+  /**
+   * Who to open Link on. Fetched once, in the background, well before anyone clicks: resolving it
+   * on the click would put a catalogue call between the button and the overlay.
+   */
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/mesh/providers')
+      .then(r => r.json())
+      .then(j => !cancelled && j.suggested && setSuggested(j.suggested))
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'd' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
@@ -464,7 +565,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
   const paid = order.status === 'paid' || order.status === 'settled'
   const settled = order.status === 'settled'
-  const connected = hasConnection && !paid
+  /**
+   * The checkout has committed to the crypto route. Holding a token is not enough: a returning
+   * shopper still gets to see card and Apple Pay before choosing.
+   */
+  const connected = hasConnection && choseCrypto && !paid
   const showManifest = (step === 'checkout' || step === 'done') && order.status !== 'draft'
   /** The bag empties on purchase, so the confirmation reads from what was bought. */
   const item = bag ?? purchased
@@ -472,7 +577,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   return (
     <div className="flex" style={{ ['--plate-accent' as string]: colourway.accent }}>
       <div className="min-w-0 flex-1">
-        <div className="mx-auto max-w-[1180px] px-5 pb-24 sm:px-6 lg:px-10">
+        {/* The bottom padding clears the fixed console bar, plus whatever iOS puts below it. */}
+        <div
+          className="mx-auto max-w-[1180px] px-5 pb-28 sm:px-6 lg:px-10"
+          style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}
+        >
           <header className="rule-b flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 py-5 sm:py-6">
             <button
               type="button"
@@ -619,12 +728,22 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           {step === 'bag' && bag && (
             <BagView
               item={bag}
-              onCheckout={() => goto('checkout')}
+              onCheckout={() => goto(isComplete(address) ? 'checkout' : 'delivery')}
               onBack={() => goto('shop')}
               onRemove={() => {
                 setBag(null)
                 goto('shop')
               }}
+            />
+          )}
+
+          {step === 'delivery' && bag && (
+            <DeliveryForm
+              item={bag}
+              value={address}
+              onChange={setAddress}
+              onContinue={() => goto('checkout')}
+              onBack={() => goto('bag')}
             />
           )}
 
@@ -670,6 +789,9 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                           </dd>
                         </div>
                       </dl>
+                      {isComplete(address) && !linkOpen && (
+                        <DeliverySummary address={address} onEdit={() => goto('delivery')} />
+                      )}
                     </div>
 
                     {order.failure && !linkOpen && (
@@ -679,14 +801,15 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                           order.failure.retryable
                             ? funding
                               ? () => startPayment()
-                              : startConnect
+                              : () => startConnect(true)
                             : undefined
                         }
                         onDismiss={() => {
                           dispatch({ type: 'clear:failure' })
-                          if (!hasConnection) goto('bag')
+                          setChoseCrypto(false)
                         }}
-                        dismissLabel={hasConnection ? 'Back to the payment options' : 'Back to the bag'}
+                        dismissLabel="Back to the payment options"
+
                       />
                     )}
 
@@ -723,7 +846,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
                             <button
                               type="button"
-                              onClick={startConnect}
+                              onClick={() => startConnect()}
                               disabled={busy}
                               className="btn-primary mt-4 w-full py-4 text-sm"
                             >
@@ -731,13 +854,23 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                                 ? 'Opening…'
                                 : connection
                                   ? `Continue with ${connection.brokerName}`
-                                  : `Pay with crypto · ${usd(PRODUCT.price + HANDLING_FEE)}`}
+                                  : suggested
+                                    ? `Pay with ${suggested.name} · ${usd(PRODUCT.price + HANDLING_FEE)}`
+                                    : `Pay with crypto · ${usd(PRODUCT.price + HANDLING_FEE)}`}
                             </button>
-                            {connection && (
-                              <p className="note mt-2">
-                                Already connected, so you will not be asked to sign in again.
-                              </p>
-                            )}
+                            <p className="note mt-2">
+                              {connection
+                                ? 'Already connected, so there is no sign-in this time. '
+                                : null}
+                              <button
+                                type="button"
+                                onClick={() => startConnect(true)}
+                                className="underline underline-offset-2 hover:text-ink"
+                              >
+                                {connection ? 'Use a different account' : 'Use a different exchange or wallet'}
+                              </button>
+                              .
+                            </p>
                             <div className="mt-3">
                               <FundingNote />
                             </div>
@@ -748,7 +881,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                       </>
                     )}
 
-                    {hasConnection && !funding && !order.warning && !order.failure && !linkOpen && (
+                    {connected && !funding && !order.warning && !order.failure && !linkOpen && (
                       <div className="rule-t pt-4">
                         <div className="label mb-2">Paying from</div>
                         <p className="text-sm text-muted">Reading your account…</p>
@@ -852,7 +985,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                       </h1>
                       <p className="mt-3 text-sm leading-relaxed text-muted">
                         Order <span className="data">{orderRef}</span> is paid. We took{' '}
-                        {usd(order.payment.totalAmountInFiat ?? PRODUCT.price)} in{' '}
+                        {usd(chargedTotal(order, PRODUCT.price + HANDLING_FEE))} in{' '}
                         {order.payment.symbol} from your {order.source?.name ?? 'connected'} account
                         and sent it to the merchant on {order.payment.networkName}.
                         {settled
@@ -866,6 +999,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                       orderId={orderRef}
                       size={`UK ${item.size}`}
                       colourway={item.colourway}
+                      address={address}
                       settled={settled}
                     />
 
@@ -902,7 +1036,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         method={pretend}
         amount={usd(PRODUCT.price + HANDLING_FEE)}
         onClose={() => setPretend(null)}
-        onUseCrypto={startConnect}
+        onUseCrypto={() => startConnect()}
       />
 
       {/* Always mounted. On a wide screen it hides while the docked panel is open; on a narrow one
