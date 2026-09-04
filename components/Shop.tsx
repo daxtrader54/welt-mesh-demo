@@ -26,7 +26,7 @@ import { ProductPanels } from './Reviews'
 import { ShopFront } from './ShopFront'
 import { Receipt } from './Receipt'
 import { ConsoleBar, TechnicalView, type ConnectionSummary, type ServerCall } from './TechnicalView'
-import { LINK_FRAME_ID, useMeshLink } from './useMeshLink'
+import { LINK_FRAME_ID, preloadMeshLink, useMeshLink } from './useMeshLink'
 
 /**
  * The shop: product, bag, checkout, confirmation.
@@ -71,6 +71,13 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
   const [drawer, setDrawer] = useState(false)
   /** True while Mesh Link is on screen, so the checkout makes room for it. */
   const [linkOpen, setLinkOpen] = useState(false)
+  /**
+   * An account is connected. Deliberately separate from `funding`: a failed balance read is not
+   * fatal, and gating the pay button on the portfolio meant a shopper who connected successfully
+   * but whose holdings could not be read was returned to the connect screen with no explanation
+   * and no way forward.
+   */
+  const [hasConnection, setHasConnection] = useState(false)
 
   const colourway = findColourway(colourwayId)
   /** True when what is on screen is exactly what is already in the bag. */
@@ -106,7 +113,10 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
         })
         const json = await res.json()
         note('POST /api/mesh/connection', null, null, json.ok)
-        if (json.ok) setConnection(json.connection)
+        if (json.ok) {
+          setConnection(json.connection)
+          setHasConnection(true)
+        }
       } catch {
         // Not fatal on its own. The portfolio read below reports the real consequence.
       }
@@ -145,7 +155,33 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
 
   const onTransferFinished = useCallback(
     async (payload: TransferFinishedPayload) => {
+      /**
+       * Mesh documents this payload as carrying pending, succeeded or failed. The SDK's published
+       * type narrows it to 'success', which is wrong, so the value is read rather than assumed.
+       * Shipping goods on a failed transfer is the one thing a payments demo must not model.
+       */
+      const status = String(payload.status ?? '').toLowerCase()
+      if (status && status !== 'success' && status !== 'succeeded') {
+        fail(
+          failure(status === 'pending' ? 'execution_failed' : 'transfer_declined', {
+            title:
+              status === 'pending'
+                ? 'Your payment is still being confirmed'
+                : 'The payment did not complete',
+            hint:
+              status === 'pending'
+                ? 'Your account has authorised it and the exchange has not finished. Nothing else is needed from you.'
+                : undefined,
+            detail: `Mesh reported transfer status "${payload.status}"`
+          })
+        )
+        return
+      }
+
       setStep('done')
+      // The confirmation is the payoff and it renders below a photograph, so without this it can
+      // land off screen at the exact moment it fires.
+      window.scrollTo({ top: 0, behavior: 'smooth' })
       // The order is placed, so the bag is no longer holding anything. Leaving "Bag (1)" in the
       // header after a confirmed purchase is the detail that made it feel unfinished.
       setBag(current => {
@@ -185,6 +221,12 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
       // Closing on the success page is not a failure, it is the end of a completed payment.
       if (page === 'transferExecutedPage') return
       if (order.status === 'paid' || order.status === 'settled') return
+      /**
+       * A designed failure must survive the shopper closing Link, and they have to close it to get
+       * back to the page. Without this guard every specific state - no eligible assets, declined,
+       * preview failed - was overwritten by a generic "Payment cancelled" on the way out.
+       */
+      if (order.status === 'failed') return
       if (!error && (order.status === 'connected' || order.status === 'draft')) return
 
       const where = describeExitPage(page)
@@ -294,12 +336,17 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
     setCalls([])
     setSize(null)
     setDrawer(false)
+    setLinkOpen(false)
+    setHasConnection(false)
     window.scrollTo({ top: 0 })
   }, [])
 
   const goto = useCallback((next: Step) => {
     setStep(next)
     setJustAdded(false)
+    // Navigating away unmounts the Link iframe, and nothing else clears this. Left set, every
+    // content block on the checkout stays hidden and the column is blank until a page reload.
+    setLinkOpen(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
@@ -331,6 +378,11 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
     }
   }, [bag])
 
+  /** Fetch the SDK chunk as the shopper reaches checkout, so the pay click does not pay for it. */
+  useEffect(() => {
+    if (step === 'checkout') void preloadMeshLink()
+  }, [step])
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'd' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
@@ -345,7 +397,7 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
 
   const paid = order.status === 'paid' || order.status === 'settled'
   const settled = order.status === 'settled'
-  const connected = funding !== null && !paid
+  const connected = hasConnection && !paid
   const showManifest = (step === 'checkout' || step === 'done') && order.status !== 'draft'
   /** The bag empties on purchase, so the confirmation reads from what was bought. */
   const item = bag ?? purchased
@@ -357,7 +409,7 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
           <header className="rule-b flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 py-5 sm:py-6">
             <button
               type="button"
-              onClick={() => goto('shop')}
+              onClick={() => (paid ? void reset() : goto('shop'))}
               className="flex items-baseline gap-5 text-left"
             >
               <span className="text-xl font-extrabold leading-none tracking-[0.2em] sm:text-2xl">
@@ -399,12 +451,12 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
 
               {/* Explicit grid placement, because mobile stacks in DOM order. The first pass put
                   the entire spec sheet between the photograph and the price. */}
-              <main className="grid items-start gap-x-16 gap-y-10 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
-                <section className="lg:col-start-1 lg:row-start-1">
+              <main className="grid items-start gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
+                <section className="md:col-start-1 md:row-start-1 lg:col-start-1 lg:row-start-1">
                   <ProductPlate colourway={colourwayId} plate={plate} onPlateChange={setPlate} />
                 </section>
 
-                <section className="flex flex-col gap-7 lg:col-start-2 lg:row-span-2 lg:row-start-1">
+                <section className="flex flex-col gap-7 md:col-start-2 md:row-span-2 md:row-start-1 lg:col-start-2 lg:row-span-2 lg:row-start-1">
                   <div>
                     <p className="label mb-2">{PRODUCT.brand}</p>
                     <h1 className="text-[2.4rem] font-bold leading-[0.95] tracking-[-0.03em] sm:text-[2.6rem]">
@@ -430,7 +482,11 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
                       }}
                     />
                     {sizeNudge && !size && (
-                      <p className="mt-2 text-sm font-medium" style={{ color: 'var(--color-warn)' }}>
+                      <p
+                        role="alert"
+                        className="mt-2 text-sm font-medium"
+                        style={{ color: 'var(--color-warn)' }}
+                      >
                         Pick a size first.
                       </p>
                     )}
@@ -478,7 +534,7 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
                   <ProductPanels />
                 </section>
 
-                <section className="lg:col-start-1 lg:row-start-2">
+                <section className="md:col-start-1 md:row-start-2 lg:col-start-1 lg:row-start-2">
                   <dl className="rule-t pt-5">
                     {SPEC.map(s => (
                       <div key={s.n} className="rule-b flex items-baseline gap-5 py-2.5">
@@ -506,8 +562,8 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
           )}
 
           {(step === 'checkout' || step === 'done') && item && (
-            <main className="grid gap-x-16 gap-y-10 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-              <section className="order-2 lg:order-none lg:col-start-1 lg:row-start-1">
+            <main className="grid gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+              <section className="order-2 lg:order-none md:col-start-1 md:row-start-1 lg:col-start-1 lg:row-start-1">
                 <ProductPlate
                   colourway={item.colourway.id}
                   plate={plate}
@@ -516,11 +572,15 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
                 />
               </section>
 
-              <section className="order-1 flex flex-col gap-7 lg:order-none lg:col-start-2 lg:row-start-1">
+              <section className="order-1 flex flex-col gap-7 md:order-none md:col-start-2 md:row-start-1 lg:col-start-2 lg:row-start-1">
                 {step === 'checkout' && !paid && (
                   <>
-                    <div className={linkOpen ? 'hidden' : undefined}>
-                      <h1 className="text-[2rem] font-bold leading-[1] tracking-[-0.02em]">
+                    <div>
+                      <h1
+                        className={`text-[2rem] font-bold leading-[1] tracking-[-0.02em] ${
+                          linkOpen ? 'hidden' : ''
+                        }`}
+                      >
                         How would you like to pay?
                       </h1>
                       <dl className="rule-t mt-5 pt-3">
@@ -555,8 +615,11 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
                               : startConnect
                             : undefined
                         }
-                        onDismiss={() => dispatch({ type: 'reset' })}
-                        dismissLabel={funding ? 'Back to the bag' : 'Choose another account'}
+                        onDismiss={() => {
+                          dispatch({ type: 'clear:failure' })
+                          if (!hasConnection) goto('bag')
+                        }}
+                        dismissLabel={hasConnection ? 'Back to the payment options' : 'Back to the bag'}
                       />
                     )}
 
@@ -609,10 +672,27 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
                       </>
                     )}
 
-                    {connected && !order.failure && !linkOpen && (
+                    {hasConnection && !funding && !order.warning && !order.failure && !linkOpen && (
+                      <div className="rule-t pt-4">
+                        <div className="label mb-2">Paying from</div>
+                        <p className="text-sm text-muted">Reading your account…</p>
+                        <div className="mt-4 h-[4.5rem] border border-rule bg-plate" aria-hidden />
+                      </div>
+                    )}
+
+                    {order.warning && !order.failure && !linkOpen && (
+                      <FailureNotice
+                        failure={order.warning}
+                        onDismiss={() => dispatch({ type: 'clear:failure' })}
+                        dismissLabel="Continue anyway"
+                      />
+                    )}
+
+                    {connected && !order.failure && !linkOpen && (funding || order.warning) && (
                       <>
                         <FundingSource
                           funding={funding}
+                          providerName={connection?.brokerName ?? null}
                           onChangeAccount={() => startPayment(true)}
                         />
                         <button
@@ -633,16 +713,30 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
                       aria-hidden={!linkOpen}
                     >
                       {linkOpen && (
-                        <div className="rule-b flex items-center justify-between px-4 py-2.5">
-                          <span className="label">Secure payment</span>
-                          <span className="label">Powered by Mesh</span>
-                        </div>
+                        <>
+                          {/* The credential warning has to be here, not behind the iframe. This is
+                              the exact moment Mesh shows a login form, and it is the moment real
+                              exchange credentials get typed into a sandbox by mistake. */}
+                          <div className="p-3">
+                            <SandboxNotice compact />
+                          </div>
+                          <div className="rule-t rule-b flex items-center justify-between px-4 py-2.5">
+                            <span className="label">Secure payment</span>
+                            <span className="label">Powered by Mesh</span>
+                          </div>
+                        </>
                       )}
                       <iframe
                         id={LINK_FRAME_ID}
                         title="Mesh Link"
                         className="w-full border-0"
-                        style={{ height: linkOpen ? 620 : 0, display: 'block' }}
+                        // Mesh asks for 665px: its sticky footer and action buttons position
+                        // against the iframe's own viewport height, not the page's.
+                        style={{
+                          height: linkOpen ? 'min(665px, calc(100dvh - 180px))' : 0,
+                          minHeight: linkOpen ? 450 : 0,
+                          display: 'block'
+                        }}
                         allow="clipboard-write; camera"
                       />
                     </div>
@@ -671,7 +765,10 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
                         Order <span className="data">{orderId}</span> is paid. We took{' '}
                         {usd(order.payment.totalAmountInFiat ?? PRODUCT.price)} in{' '}
                         {order.payment.symbol} from your {order.source?.name ?? 'connected'} account
-                        and settled it to the merchant on {order.payment.networkName}.
+                        and sent it to the merchant on {order.payment.networkName}.
+                        {settled
+                          ? ' The merchant has confirmed receipt.'
+                          : ' We will confirm here when the merchant acknowledges it.'}
                       </p>
                     </div>
 

@@ -60,12 +60,40 @@ export type MeshLinkHandlers = {
   onVisibilityChange?: (visible: boolean) => void
 }
 
+/**
+ * Pull the SDK into the module cache without opening anything.
+ *
+ * It is a 105KB chunk that cannot be imported at module scope, so without this the first click
+ * pays for the download on top of the token round trip and the iframe load, all in series, at the
+ * moment everyone is watching. Also suppresses the SDK's own prewarm iframe, which points at the
+ * production host and is created and destroyed microseconds apart when imported inside a click.
+ */
+export async function preloadMeshLink(): Promise<void> {
+  try {
+    ;(window as unknown as { meshLinkShouldSkipPrewarm?: boolean }).meshLinkShouldSkipPrewarm = true
+    await import('@meshconnect/web-link-sdk')
+  } catch {
+    // The click path imports it again and reports the failure properly there.
+  }
+}
+
+/** How long Link gets to emit its first event before we assume it will never render. */
+const LOAD_TIMEOUT_MS = 12_000
+
 export function useMeshLink(handlers: MeshLinkHandlers) {
   const [busy, setBusy] = useState(false)
   // A ref as well as state: state updates are async and a fast double click can slip between.
   const inFlight = useRef(false)
   const latest = useRef(handlers)
   latest.current = handlers
+  /** Held so the session can be closed on exit rather than left loaded behind a collapsed frame. */
+  const session = useRef<{ closeLink: () => void } | null>(null)
+  const watchdog = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const clearWatchdog = () => {
+    if (watchdog.current) clearTimeout(watchdog.current)
+    watchdog.current = null
+  }
 
   const open = useCallback(
     async (
@@ -100,9 +128,27 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
 
         latest.current.onVisibilityChange?.(true)
 
+        /**
+         * If the origin is not registered in Mesh's Allowed Link URLs, or the network blocks
+         * *.meshconnect.com, the SDK emits nothing at all: no event, no exit, no console error,
+         * just a blank frame forever. It is the most common first-run failure and the only one in
+         * this app that produced complete silence.
+         */
+        clearWatchdog()
+        watchdog.current = setTimeout(() => {
+          latest.current.onVisibilityChange?.(false)
+          latest.current.onFailure(
+            failure('sdk_load', {
+              hint: `Mesh Link did not load. Check that ${window.location.origin} is registered in Mesh's Allowed Link URLs, and that *.meshconnect.com is reachable from this network.`,
+              detail: `No SDK event within ${LOAD_TIMEOUT_MS / 1000}s of openLink`
+            })
+          )
+        }, LOAD_TIMEOUT_MS)
+
         const link = createLink({
           renderType: 'embedded',
           theme: 'light',
+          language: 'system',
           displayFiatCurrency: 'USD',
           // Mesh-managed token ids for accounts already connected. Lets a returning shopper skip
           // signing in again. Empty on a first visit, and undefined rather than [] because the
@@ -115,18 +161,31 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
           accessTokens: json.accessTokens?.length
             ? (json.accessTokens as unknown as IntegrationAccessToken[])
             : undefined,
-          onEvent: event => latest.current.onEvent(event),
+          onEvent: event => {
+            clearWatchdog()
+            latest.current.onEvent(event)
+          },
           onIntegrationConnected: payload => latest.current.onConnected(payload),
           onTransferFinished: payload => {
             latest.current.onVisibilityChange?.(false)
             latest.current.onTransferFinished(payload)
           },
           onExit: (error, summary) => {
+            clearWatchdog()
             latest.current.onVisibilityChange?.(false)
             latest.current.onExit(error, summary)
+            // Mesh's guidance: close the session in onExit. Without it the frame keeps a dead
+            // session loaded behind the collapsed container and its listener stays attached.
+            try {
+              session.current?.closeLink()
+            } catch {
+              // Already gone. Nothing to do.
+            }
+            session.current = null
           }
         })
 
+        session.current = link
         link.openLink(json.linkToken, LINK_FRAME_ID)
       } catch (err) {
         latest.current.onVisibilityChange?.(false)

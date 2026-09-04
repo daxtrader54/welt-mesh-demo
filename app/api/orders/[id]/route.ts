@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { failure } from '@/lib/failure'
 import { fail, guard, ok, readJson } from '@/lib/http'
-import { getOrder, putOrder } from '@/lib/store/records'
+import { getOrder, getSettlement, putOrder } from '@/lib/store/records'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -18,9 +18,38 @@ type Ctx = { params: Promise<{ id: string }> }
 export async function GET(_req: Request, ctx: Ctx) {
   return guard(async () => {
     const { id } = await ctx.params
-    const order = await getOrder(id)
-    if (!order) return fail(failure('unknown', { detail: `No order ${id}` }), 404)
-    return ok({ order })
+    const [order, settlement] = await Promise.all([getOrder(id), getSettlement(id)])
+    if (!order) {
+      return fail(
+        failure('unknown', { title: 'We cannot find that order', detail: `No order ${id}` }),
+        404
+      )
+    }
+
+    // Settlement is the webhook's fact and lives in its own key, so it is merged on read rather
+    // than written into a record the browser also updates.
+    const settled = settlement?.transferStatus === 'Succeeded'
+    const refunded =
+      settlement?.transferStatus === 'RefundSucceeded' ||
+      settlement?.transferStatus === 'RefundPending'
+
+    return ok({
+      order: {
+        ...order,
+        status: settled ? 'settled' : settlement?.transferStatus === 'Failed' ? 'failed' : order.status,
+        settledAt: settled ? settlement?.receivedAt : order.settledAt,
+        txHash: settlement?.txHash ?? order.txHash,
+        refundStatus: refunded ? settlement?.transferStatus : undefined,
+        webhook: settlement
+          ? {
+              eventId: settlement.eventId,
+              transferStatus: settlement.transferStatus,
+              receivedAt: settlement.receivedAt,
+              txHash: settlement.txHash
+            }
+          : order.webhook
+      }
+    })
   })
 }
 

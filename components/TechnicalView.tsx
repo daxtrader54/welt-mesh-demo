@@ -57,7 +57,11 @@ const ROUTES: { route: string; does: string; mesh: string | null }[] = [
   { route: 'GET /api/mesh/portfolio', does: 'Reads holdings for the connection', mesh: 'POST /api/v1/holdings/get + /value' },
   { route: 'PATCH /api/orders/:id', does: 'Records what the browser saw', mesh: null },
   { route: 'POST /api/mesh/webhook', does: 'Verifies signature, settles the order', mesh: 'inbound from Mesh' },
-  { route: 'GET /api/mesh/providers', does: 'Who could fund this payment', mesh: 'GET /api/v1/transfers/managed/integrations' }
+  {
+    route: 'GET /api/mesh/providers',
+    does: 'Who could fund this, and who Link will offer',
+    mesh: 'GET /api/v1/transfers/managed/integrations + /integrations'
+  }
 ]
 
 /**

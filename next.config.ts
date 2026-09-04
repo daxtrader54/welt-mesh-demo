@@ -5,7 +5,10 @@ import type { NextConfig } from 'next'
 // overlay is a blank grey box with no console error.
 const csp = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // 'unsafe-inline' is load-bearing for Next's bootstrap; 'unsafe-eval' is not, and no shipped
+  // chunk uses eval or new Function, so it is not granted.
+  "script-src 'self' 'unsafe-inline'",
+  "object-src 'none'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://file-cdn.meshconnect.com",
   "font-src 'self' data:",
