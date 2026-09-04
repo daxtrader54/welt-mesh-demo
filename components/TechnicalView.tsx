@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { clockTime, maskToken } from '@/lib/format'
+import { useModal } from './useModal'
 import type { OrderState } from '@/lib/order/state'
 
 /**
@@ -14,6 +15,16 @@ import type { OrderState } from '@/lib/order/state'
  * steps that genuinely did not happen, like signing in again when a managed token skipped it.
  */
 const SDK_EVENT_TYPES = 43
+
+/**
+ * How many *distinct* types have fired.
+ *
+ * `log.length` is the number of events, not the number of types, and `transferPreviewed` repeats
+ * within a session. Counting events against a total of types read as "11 of the 43 types" when it
+ * was really eleven events across fewer types, and on a long run it can exceed 43, which makes the
+ * sentence say something impossible.
+ */
+const typesFired = (log: { type: string }[]) => new Set(log.map(e => e.type)).size
 
 /**
  * Behind the payment.
@@ -109,7 +120,7 @@ export function PanelHandle({ open, onToggle }: { open: boolean; onToggle: () =>
       aria-expanded={open}
       aria-label={open ? 'Collapse the technical panel' : 'Open the technical panel'}
       title={open ? 'Collapse' : 'Behind the payment'}
-      className="fixed top-1/2 z-40 hidden h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-rule-strong bg-plate text-ink shadow-sm transition-[right,border-color] duration-200 hover:border-ink lg:grid"
+      className="fixed top-1/2 z-40 hidden h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-rule-strong bg-plate text-ink shadow-sm transition-[right,border-color] duration-200 hover:border-ink xl:grid"
       style={{ right: open ? 'calc(26rem - 1.125rem)' : '0.75rem' }}
     >
       <span className="data text-sm leading-none" aria-hidden>
@@ -153,7 +164,7 @@ export function ConsoleBar({
       /* The bottom inset keeps the tap target clear of iOS Safari's toolbar and the home
          indicator, which were sitting on top of it. */
       style={{ paddingBottom: 'calc(0.5rem + env(safe-area-inset-bottom))' }}
-      className={`group fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-4 border-t-2 border-ink bg-plate px-4 pt-2 transition-colors hover:bg-ground sm:gap-5 sm:px-16 ${className}`}
+      className={`group fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-4 border-t-2 border-ink bg-plate px-4 pt-2 transition-colors hover:bg-ground sm:gap-5 sm:px-6 ${className}`}
     >
       <span className="flex shrink-0 items-center gap-2">
         <span
@@ -166,7 +177,11 @@ export function ConsoleBar({
         <span className="label text-ink">Behind the payment</span>
       </span>
 
-      <span className="hidden min-w-0 items-baseline gap-4 sm:flex">
+      {/* Clipped, and only from `lg`. The three event rows are `whitespace-nowrap` between two
+          `shrink-0` groups, so with nothing to stop them they measured 1053px and simply pushed
+          out of the bar: at 768px the trail printed straight over the event count and the Open
+          pill, and it does that while a payment is running. */}
+      <span className="hidden min-w-0 items-baseline gap-4 overflow-hidden lg:flex">
         {trail.length ? (
           trail.map((e, i) => (
             <span
@@ -297,7 +312,7 @@ export function TechnicalView({
           `${rel(x.at)}  ${x.ok ? 'ok  ' : 'FAIL'} ${x.route}${x.ms ? ` (${x.ms}ms)` : ''}${x.mesh ? ` -> ${x.mesh}` : ''}`
       ),
       '',
-      `## Mesh SDK events (${o.log.length} of ${SDK_EVENT_TYPES} possible types)`,
+      `## Mesh SDK events (${o.log.length} events, ${typesFired(o.log)} of ${SDK_EVENT_TYPES} types)`,
       ...o.log.map(e => `${rel(e.at)}  ${e.type}  ${JSON.stringify(e.payload ?? null)}`),
       '',
       '## Webhook (server to server, never touched the browser)',
@@ -348,12 +363,14 @@ export function TechnicalView({
     }
   }, [open, tab, providers, health, ledger])
 
-  useEffect(() => {
-    if (!open || docked) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [open, docked, onClose])
+  /**
+   * Focus, but only for the sheet. The docked panel is page furniture sitting beside the shop, not
+   * something on top of it, so trapping focus there would be wrong: `enabled` is false when docked
+   * and the hook does nothing. The sheet had Escape and `aria-modal="true"` already, which is the
+   * awkward half: assistive technology was told to confine itself to a dialog the keyboard had
+   * never been moved into.
+   */
+  const sheet = useModal<HTMLElement>(open && !docked, onClose)
 
   if (!open) return null
 
@@ -389,9 +406,9 @@ export function TechnicalView({
             <div className="mb-3 flex items-start justify-between gap-4">
               <p className="note">
                 Every event the Mesh SDK fired, in order, with its real payload. Nothing is
-                filtered: {order.log.length} of the {SDK_EVENT_TYPES} types the SDK can emit have
-                fired in this session. The rest belong to flows this shop does not use, or to steps
-                that did not happen.
+                filtered: {order.log.length} events, covering {typesFired(order.log)} of the{' '}
+                {SDK_EVENT_TYPES} types the SDK can emit. The rest belong to flows this shop does
+                not use, or to steps that did not happen.
               </p>
               <button
                 type="button"
@@ -414,7 +431,7 @@ export function TechnicalView({
               <div className="rule-b mb-3 pb-3">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="label">Webhook received</span>
-                  <span className="data text-xs" style={{ color: 'var(--plate-accent)' }}>
+                  <span className="data text-xs" style={{ color: 'var(--color-positive)' }}>
                     {order.webhook.transferStatus ?? 'delivered'}
                   </span>
                 </div>
@@ -668,7 +685,7 @@ export function TechnicalView({
                             style={{
                               color:
                                 t.status === 'succeeded'
-                                  ? 'var(--plate-accent)'
+                                  ? 'var(--color-positive)'
                                   : t.status === 'failed'
                                     ? 'var(--color-warn)'
                                     : undefined
@@ -834,20 +851,31 @@ export function TechnicalView({
     </div>
   )
 
+  /**
+   * Docked from `xl` (1280px), not `lg` (1024px).
+   *
+   * The panel takes a fixed 26rem out of a flex row, but every breakpoint rule in the shop column
+   * next to it is a viewport query. Between 1024 and about 1200 the column was down to roughly
+   * 608px while still being styled as a wide screen: the product hero collapsed to 96px, the shop
+   * front cards to 114px, and the bag line item overflowed its own summary. `?demo=1` opens this
+   * docked, so that band was the presenting configuration.
+   */
   if (docked) {
     return (
-      <aside className="sticky top-0 hidden h-screen w-[26rem] shrink-0 border-l border-rule lg:block">
+      <aside className="sticky top-0 hidden h-screen w-[26rem] shrink-0 border-l border-rule xl:block">
         {body}
       </aside>
     )
   }
 
   return (
-    <div className="lg:hidden">
+    <div className="xl:hidden">
       <div className="fixed inset-0 z-40 bg-ink/30" onClick={onClose} aria-hidden />
       {/* A sheet, not a takeover. Full height on a phone meant the shop disappeared behind the
           panel and there was no way to see what the events were about. */}
       <aside
+        ref={sheet}
+        tabIndex={-1}
         style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
         className="fixed inset-x-0 bottom-0 z-50 flex max-h-[72dvh] flex-col border-t-2 border-ink shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-md sm:border-l sm:border-t-0 sm:border-rule sm:pb-0"
         role="dialog"

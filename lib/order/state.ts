@@ -195,6 +195,29 @@ export type OrderEvent =
       } | null
     }
   | { type: 'settlement:timeout'; at: number; reason: string }
+  /**
+   * The order as the server has it, after a page reload lost the browser's copy.
+   *
+   * Everything else in this reducer is stamped by an event the browser watched happen. This one is
+   * not, and it does not pretend otherwise: it restores what the server can prove (the reference,
+   * the amount, the authorisation, the webhook) and leaves the rows that were only ever witnessed
+   * in the previous page view pending, with a fact saying why. A receipt that returns is worth
+   * more than a trace that lies.
+   */
+  | {
+      type: 'restored'
+      at: number
+      status: OrderStatus
+      payment: Partial<PaymentDetail>
+      paidAt: number | null
+      source: { name: string; type: string } | null
+      webhook?: {
+        eventId?: string
+        transferStatus?: string
+        receivedAt?: number
+        txHash?: string
+      } | null
+    }
   | { type: 'failed'; at: number; failure: Failure }
   /** Dismiss a failure without discarding the trace, which is the interesting part after one. */
   | { type: 'clear:failure' }
@@ -300,6 +323,38 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
             ? [{ label: 'Received', value: new Date(w.receivedAt).toISOString(), technical: true }]
             : [])
         ])
+      }
+    }
+
+    case 'restored': {
+      const w = action.webhook
+      const settled = action.status === 'settled'
+      const withAuth = mark(state.steps, 'authorised', 'done', action.paidAt ?? action.at, [
+        { label: 'Restored from', value: 'the order record on the server' },
+        ...(action.payment.transferId
+          ? [{ label: 'TransferId', value: action.payment.transferId, technical: true }]
+          : [])
+      ])
+      return {
+        ...state,
+        status: action.status,
+        source: action.source ?? state.source,
+        payment: { ...state.payment, ...action.payment },
+        webhook: w
+          ? {
+              eventId: w.eventId ?? null,
+              transferStatus: w.transferStatus ?? null,
+              receivedAt: w.receivedAt ?? action.at,
+              txHash: w.txHash ?? null
+            }
+          : state.webhook,
+        steps: settled
+          ? mark(withAuth, 'settled', 'done', w?.receivedAt ?? action.at, [
+              { label: 'Confirmed by', value: 'Mesh webhook, server to server' },
+              ...(w?.transferStatus ? [{ label: 'TransferStatus', value: w.transferStatus }] : []),
+              ...(w?.eventId ? [{ label: 'EventId', value: w.eventId, technical: true }] : [])
+            ])
+          : withAuth
       }
     }
 

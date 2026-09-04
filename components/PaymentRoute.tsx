@@ -178,7 +178,7 @@ export function Manifest({ order }: { order: OrderState }) {
                 <span
                   className="data w-4 shrink-0 text-sm"
                   style={{
-                    color: failed ? 'var(--color-warn)' : isDone ? 'var(--plate-accent)' : undefined
+                    color: failed ? 'var(--color-warn)' : isDone ? 'var(--color-positive)' : undefined
                   }}
                   aria-hidden
                 >

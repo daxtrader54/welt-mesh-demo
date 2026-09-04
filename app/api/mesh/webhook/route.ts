@@ -1,7 +1,7 @@
 import { meshEnv } from '@/lib/env'
 import { webhookPayload } from '@/lib/mesh/schemas'
-import { SIGNATURE_HEADER, idempotencyKey, verifyWebhook } from '@/lib/mesh/webhook'
-import { claimWebhookEvent, putSettlement } from '@/lib/store/records'
+import { SIGNATURE_HEADER, checkAgainstOrder, idempotencyKey, verifyWebhook } from '@/lib/mesh/webhook'
+import { claimWebhookEvent, getOrder, putSettlement } from '@/lib/store/records'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -79,19 +79,47 @@ async function handle(raw: string): Promise<Response> {
   }
 
   /**
+   * Check the delivery against the order before believing it.
+   *
+   * The amount, token and destination arrive on this payload and were parsed and discarded, so
+   * "Succeeded" was taken entirely on trust. Now they are compared with what the merchant asked
+   * for, and the result is recorded either way, so the panel can show the check rather than assert
+   * it. An order that cannot be loaded leaves `checked` empty, which is the honest record of a
+   * comparison that did not happen; refusing to settle on that basis would be worse than settling.
+   */
+  const order = await getOrder(orderId)
+  const verification = order
+    ? checkAgainstOrder(payload, order)
+    : { checked: [], mismatches: [], blocking: false }
+
+  // `checkAgainstOrder` decides what is serious enough to refuse on: a wrong destination or a
+  // wrong amount. A token naming difference, or an amount so far out that it reads as a different
+  // unit, is recorded and surfaced instead, because our own assumption being wrong must not be
+  // able to refuse a real settlement.
+  if (verification.mismatches.length) {
+    console.warn('[welt] webhook does not match the order', { orderId, ...verification })
+  }
+
+  /**
    * Written to its own key, never merged into the order record.
    *
    * The browser also writes that record, and both paths were doing read-modify-write with no
    * compare-and-swap, so a webhook landing between the browser's read and its write vanished along
    * with the whole reconciliation trail. One writer per fact removes the race instead of narrowing
    * it, and it means the settlement survives whatever the browser does afterwards.
+   *
+   * `?? undefined` on the optional fields because the payload is nullish throughout: Mesh's
+   * contract allows an explicit null, and the record only wants the value or nothing.
    */
   await putSettlement(orderId, {
     eventId: key,
-    transferStatus: payload.TransferStatus ?? '',
+    // `Unverified` ranks below every real status, so this records what arrived without ever
+    // displacing a settlement that checked out.
+    transferStatus: verification.blocking ? 'Unverified' : (payload.TransferStatus ?? ''),
     receivedAt: Date.now(),
-    txHash: payload.TxHash,
-    transferId: payload.TransferId
+    txHash: payload.TxHash ?? undefined,
+    transferId: payload.TransferId ?? undefined,
+    verification
   })
 
   /**
