@@ -144,9 +144,16 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * did.
    */
   const readPortfolio = useCallback(async () => {
+    /**
+     * A hung request has to end as a warning, not as a spinner nobody can get past. "Reading your
+     * account" with no way forward is the worst state this checkout can be in, and it is the one
+     * a stuck fetch produces.
+     */
+    const abort = new AbortController()
+    const watchdog = setTimeout(() => abort.abort(), 20_000)
     try {
       const started = Date.now()
-      const res = await fetch('/api/mesh/portfolio')
+      const res = await fetch('/api/mesh/portfolio', { signal: abort.signal })
       const json = await res.json()
       note('GET /api/mesh/portfolio', 'POST /api/v1/holdings/get + /value', Date.now() - started, json.ok)
 
@@ -186,13 +193,20 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         }
       })()
     } catch (err) {
+      const timedOut = err instanceof Error && err.name === 'AbortError'
       dispatch({
         type: 'holdings:failed',
         at: Date.now(),
         failure: failure('portfolio_failed', {
-          detail: err instanceof Error ? err.message : String(err)
+          detail: timedOut
+            ? 'Reading the account took longer than 20 seconds and was given up on'
+            : err instanceof Error
+              ? err.message
+              : String(err)
         })
       })
+    } finally {
+      clearTimeout(watchdog)
     }
   }, [note])
 
