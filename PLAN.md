@@ -1,4 +1,4 @@
-# WELT — implementation plan
+# WELT implementation plan
 
 > **This is the plan as it was agreed, kept unedited as a record of what was decided and why.**
 >
@@ -7,7 +7,10 @@
 > starts on a listing page rather than the product page; card and Apple Pay open sheets rather than
 > sitting disabled; the connect session shows Mesh's picker while the payment session is
 > deep-linked, which is the reverse of what section 0c proposed; the merchant accepts three
-> stablecoins rather than one; and there are now eight route handlers rather than six.
+> stablecoins rather than one, and the shopper chooses which; eligibility comes from Mesh's quote
+> endpoint rather than from comparing a balance against a price; the connected account survives a
+> reset, so a returning shopper skips the login; the handling fee ships at zero; and there are nine
+> route handlers calling six Mesh endpoints, rather than six handlers calling four.
 >
 > Sections 0b and 0c are the part worth reading. They are the measured results of running the
 > whole flow against the sandbox before any application code was written, and every number in them

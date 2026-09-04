@@ -19,7 +19,7 @@ const SDK_EVENT_TYPES = 43
  * Behind the payment.
  *
  * Three audiences, one panel. The product lead already has the manifest in plain English on the
- * page. Here the engineer gets the real event stream and the six routes this app actually has,
+ * page. Here the engineer gets the real event stream and the routes this app actually has,
  * stamped as the session hits them, which answers "what work is this for us" with data from the
  * run they just watched rather than with a diagram. And whoever is driving the demo gets the
  * sandbox accounts, because failure states should be shown for real rather than described.
@@ -50,11 +50,19 @@ type Provider = {
   reason: string | null
 }
 
-/** Every route this app has. Six of them, which is the whole integration. */
+/**
+ * The routes that carry the integration. Nine exist; `GET /api/health`, `POST /api/session/reset`
+ * and the `GET` on an order exist for the demo and are not part of what a merchant would build.
+ */
 const ROUTES: { route: string; does: string; mesh: string | null }[] = [
   { route: 'POST /api/mesh/link-token', does: 'Mints a Link token on the click', mesh: 'POST /api/v1/linktoken' },
   { route: 'POST /api/mesh/connection', does: 'Takes custody of the auth token', mesh: null },
   { route: 'GET /api/mesh/portfolio', does: 'Reads holdings for the connection', mesh: 'POST /api/v1/holdings/get + /value' },
+  {
+    route: 'GET /api/mesh/quotes',
+    does: 'Per-asset eligibility, fees and funding source',
+    mesh: 'POST /api/v1/transfers/managed/quote'
+  },
   { route: 'PATCH /api/orders/:id', does: 'Records what the browser saw', mesh: null },
   { route: 'POST /api/mesh/webhook', does: 'Verifies signature, settles the order', mesh: 'inbound from Mesh' },
   {
@@ -193,11 +201,15 @@ const BUILD_NOTES: { heading: string; body: string }[] = [
   },
   {
     heading: 'The price is set on the server',
-    body: 'Amount, asset, network and destination all come from server configuration. The browser sends a colourway and a size and nothing else. A checkout that lets the client name its own price is not a checkout.'
+    body: 'Amount, network and destination all come from server configuration. The browser sends a colourway, a size, and which of the three accepted stablecoins to pay in, and that choice is validated against the merchant list before it reaches Mesh. A checkout that lets the client name its own price is not a checkout.'
   },
   {
     heading: 'Redis, for two things only',
     body: 'Webhook idempotency needs a write that survives across serverless invocations, and the order the page polls has to be the order the webhook wrote. Neither works in process memory on Vercel. Nothing else here needs a database.'
+  },
+  {
+    heading: 'Eligibility is Mesh’s answer, not arithmetic',
+    body: 'Comparing a balance against a price is the obvious version and it is wrong: it misses the withdrawal minimum, the fees, and the fact that Mesh can cover a shortfall. One quote call per accepted asset returns eligibility, the fee, and where the money would come from, so the page can say balance, buying power or a card on file.'
   },
   {
     heading: 'Findings that changed the build',
@@ -260,7 +272,10 @@ export function TechnicalView({
     }
   }
   const [providers, setProviders] = useState<Provider[] | null>(null)
-  const [health, setHealth] = useState<{ storage?: string; config?: { environment?: string } } | null>(null)
+  const [health, setHealth] = useState<{
+    storage?: string
+    config?: { environment?: string; optional?: { webhookSecret?: boolean } }
+  } | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -355,8 +370,8 @@ export function TechnicalView({
         {tab === 'integration' && (
           <>
             <p className="note mb-3">
-              Six routes. The client secret exists only inside them, and the browser only ever
-              receives a Link token.
+              The seven routes that carry the integration. The client secret exists only inside
+              them, and the browser only ever receives a Link token.
             </p>
             <ul>
               {ROUTES.map(r => {
@@ -494,7 +509,19 @@ export function TechnicalView({
                   <dt className="label">Storage</dt>
                   <dd className="data text-xs">{health?.storage ?? '…'}</dd>
                 </div>
+                <div className="flex items-baseline justify-between">
+                  <dt className="label">Webhook secret</dt>
+                  <dd className="data text-xs">
+                    {health?.config ? (health.config.optional?.webhookSecret ? 'set' : 'missing') : '…'}
+                  </dd>
+                </div>
               </dl>
+              {health?.config && !health.config.optional?.webhookSecret && (
+                <p className="note mt-2" style={{ color: 'var(--color-warn)' }}>
+                  No signing secret, so every webhook delivery is refused and orders stop at paid.
+                  Set MESH_WEBHOOK_SECRET and redeploy.
+                </p>
+              )}
               {health?.storage === 'memory' && (
                 <p className="note mt-2" style={{ color: 'var(--color-warn)' }}>
                   In-memory store. Fine locally, unreliable on serverless: the webhook and the
