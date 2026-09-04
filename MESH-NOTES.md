@@ -313,6 +313,28 @@ identical from the outside, and only one of them is your fault:
 | Present, `responseCode` not OK | It arrived and you refused it. Usually a signature or a missing secret |
 | Present, `responseCode: OK` | Delivered and accepted |
 
+**Mesh delivers each transfer's webhook more than once, and not in order.** 16 of the first 25
+transfers on this client show exactly two delivery attempts, about 24 seconds apart, both answered
+`OK`. A 200 is not retried, so those are two distinct events rather than a retry. In six cases the
+log lists them out of chronological order. Anything that stores "the latest status wins" will
+therefore un-settle a settled order when the second delivery carries `Pending`, and the browser's
+poll has usually stopped looking by then, so the receipt keeps claiming settled while the record
+says otherwise. Give the statuses a precedence and refuse to move backwards.
+
+**Refund events arrive on the same key.** `RefundPending` and `RefundSucceeded` come through the
+same webhook against the same transaction, so merging them into the settlement record erases the
+settlement they follow. They describe what happened after the payment, not instead of it.
+
+**The payload can carry explicit nulls.** A delivery with `"TxHash": null` is well formed and Mesh's
+contract allows it. Zod's `.optional()` accepts a missing key and rejects an explicit null, so a
+schema built with `.optional()` returns 400 for a body that is fine, and Mesh does not re-deliver
+something it has already had a response to. That settlement is gone. Use `.nullish()` on every
+field.
+
+**Settlement latency, measured across 17 successful transfers:** 6, 7, 7, 9, 9, 10, 11, 12, 12, 12,
+12, 16, 17, 20, 20, 28 and 34 seconds. Any poll that gives up sooner than about 45 seconds will
+report "no webhook received" for payments that settled perfectly well.
+
 Measured across the first 25 transfers on this client: **14 delivered, 2 refused, 9 never
 attempted.** The two refusals are real 401s from before the webhook secret was configured, which is
 the endpoint working correctly.
@@ -350,7 +372,15 @@ JSON re-serialised refused. If that passes and settlement still does not appear,
   overlay is a blank grey box.
 - Embedded rendering needs width. On a 375px viewport the embedded frame loaded, fired `pageLoaded`,
   and then showed white. Use the overlay below about 1024px.
-- Close the session in `onExit`, or the frame keeps a dead session loaded and its listener attached.
+- **`closeLink()` fires `onExit`, and Mesh's own documentation says it does not.** `llms-full.txt`
+  states that `closeLink()` emits no `onExit` and tells you to call it from inside your `onExit`
+  handler. In SDK 3.12.0 `closeLink()` ends with `options.onExit?.call(options)`, so following that
+  advice literally is unbounded recursion: measured at 4,189 nested invocations before the stack
+  gave out, with the `RangeError` swallowed by the `try/catch` the same advice encourages. Every
+  frame after the first re-enters with no arguments, so the real `SessionSummary` is overwritten by
+  a generic one 4,000 times and `page` never reaches your UI. You still have to close the session,
+  or the frame keeps a dead one loaded with its listener attached. Take the handle and null your
+  reference **before** calling `closeLink()`, so the re-entrant call finds nothing and returns.
 - `SessionSummary.page` tells you exactly where someone abandoned. `selectedIntegration.id` on that
   summary is how you replay the shopper's provider choice into the payment session.
 - The published `BrokerType` union is behind the API. It lists `sandbox` but not `sandboxCoinbase`,

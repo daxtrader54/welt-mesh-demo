@@ -5,12 +5,14 @@
 > The application has moved past it in several places, and where the two disagree the application
 > is correct. The README describes what was actually built. The notable divergences: the shop
 > starts on a listing page rather than the product page; card and Apple Pay open sheets rather than
-> sitting disabled; the connect session shows Mesh's picker while the payment session is
-> deep-linked, which is the reverse of what section 0c proposed; the merchant accepts three
-> stablecoins rather than one, and the shopper chooses which; eligibility comes from Mesh's quote
-> endpoint rather than from comparing a balance against a price; the connected account survives a
-> reset, so a returning shopper skips the login; the handling fee ships at zero; and there are nine
-> route handlers calling six Mesh endpoints, rather than six handlers calling four.
+> sitting disabled; both Link sessions are deep-linked to a provider the server ranks from the live
+> catalogue, with Mesh's full picker one click away, rather than either of them opening on the
+> catalogue as section 0c proposed; the merchant accepts three stablecoins rather than one, and the
+> shopper chooses which; eligibility comes from Mesh's quote and configure endpoints rather than
+> from comparing a balance against a price; the connected account survives a reset, so a returning
+> shopper skips the login; stock is per colourway rather than one size run for the shop; the
+> handling fee ships at zero; and there are ten route handlers calling eight Mesh endpoints, rather
+> than six handlers calling four.
 >
 > Sections 0b and 0c are the part worth reading. They are the measured results of running the
 > whole flow against the sandbox before any application code was written, and every number in them

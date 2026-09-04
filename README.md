@@ -78,12 +78,16 @@ event arrives within twelve seconds it says so and names the domain to register.
 | `NEXT_PUBLIC_MERCHANT_HANDLING_FEE` | no | Merchant fee in dollars, sent as Mesh's `clientFee`. `0` by default, and see Decisions for why |
 
 `?demo=1` opens the technical panel docked. `Ctrl/Cmd + Shift + D` toggles it. `/api/health` reports
-which variables are present, without values, and whether the store is Redis or memory.
+which variables are present, without values, whether the store is Redis or memory, and in
+`storageReachable` whether it actually answered. Those last two are not the same thing: constructing
+the Upstash client makes no network call, so a health check that only reads environment variables
+goes green with the database paused, which is the state that takes both the pay path and settlement
+down.
 
 ### Scripts
 
 ```bash
-npm test                                    # 91 tests, no secrets, under a second
+npm test                                    # 115 tests, no secrets, under a second
 npm run typecheck
 node scripts/webhook-check.mjs <url>        # prove the webhook endpoint without waiting for Mesh
 node scripts/crop-product-images.mjs        # re-frame the photographs from public/product-src
@@ -118,16 +122,16 @@ app/
   api/mesh/quotes              per-asset eligibility, fees and funding sources
   api/mesh/providers           who could fund this, who Link will offer, and which to default to
   api/mesh/transfers           Mesh's own ledger, with its webhook delivery logs
-  api/mesh/webhook             raw body, HMAC, idempotent settlement
+  api/mesh/webhook             raw body, HMAC, idempotent settlement, checked against the order
   api/orders/[id]              order state, owned by the session that created it
-  api/session/reset            clears the order, keeps the connection
-  api/health                   config presence, no values
+  api/session/reset            keeps the connection; the browser drops the order id
+  api/health                   config presence and a real store round trip, no values
 lib/
   mesh/     client, request builders, provider mapping, schemas, webhook verification
   order/    the event reducer that drives the manifest and the receipt
   store/    Redis with a memory fallback, TTLs on everything
-components/ shop, listing, plate, checkout, portfolio, bag, receipt, technical panel
-scripts/    webhook-check, crop-product-images
+components/ shop, listing, plate, checkout, portfolio, bag, receipt, history, technical panel
+scripts/    webhook-check, crop-product-images, trim-logo
 ```
 
 Ten route files. Eight carry the integration; `health` and `session/reset` exist for the demo.
@@ -418,9 +422,11 @@ and the receipt.
 quantity control or a delivery charge would put the bag total and the money that actually moves out
 of step. A checkout whose total disagrees with its payment is the one thing that cannot happen.
 
-**Reset keeps the connection.** It clears the order and leaves the account connected, so a second run
-skips the exchange login. It never calls Mesh's remove-connection endpoint, which permanently revokes
-a token id with no way back. *Tradeoff:* a genuinely fresh session needs a new browser profile, which
+**Reset keeps the connection.** The browser drops the order it was working on and the account stays
+connected, so a second run skips the exchange login. The order itself is not deleted server side and
+does not need to be: it lives under its own key with a day's TTL and is unreachable the moment the
+browser forgets the id. It never calls Mesh's remove-connection endpoint, which permanently revokes a
+token id with no way back. *Tradeoff:* a genuinely fresh session needs a new browser profile, which
 is the right cost for the rarer case.
 
 **Holding a token is not the same as having chosen how to pay.** The two were one flag, so a
@@ -509,6 +515,20 @@ Stone. It can move an order to `paid`; only the webhook writes `settled`.
 delivery gets an empty 401, so an unauthenticated caller cannot learn how the deployment is
 configured.
 
+**A signed delivery still has to describe the order it claims to.** The amount, token and
+destination arrive on the payload and are compared against the order record before anything is
+marked settled: a wrong destination or a wrong amount is recorded and refused. Not exploitable here,
+because those three values are bound into the link token server side and only Mesh can sign a
+delivery, but "so a $1 transfer against my $50 order marks it paid?" is the first question a
+merchant's security person asks, and the answer should be no with the check visible in the panel.
+An amount two orders of magnitude out is treated as our unit assumption being wrong rather than
+fraud, and recorded instead of refused, because refusing a real settlement is the worse failure.
+
+**Settlement has a precedence and never moves backwards.** Mesh sends two deliveries per transfer as
+the norm and its own log shows them out of chronological order, so storing whichever landed last let
+a late `Pending` un-settle a paid order while the browser's poll had already stopped looking. Refunds
+are kept in their own key rather than overwriting the settlement they follow.
+
 **Responses are parsed through Zod**, using `.nullish()` wherever Mesh's OpenAPI marks a field
 nullable, so an unexpected shape fails closed rather than rendering and an explicit null does not take
 the checkout down. Event payloads and error strings render as text, never as HTML.
@@ -569,19 +589,22 @@ Three that are non-obvious:
 
 ## Testing
 
-91 tests over the logic where a regression costs something: webhook HMAC verification including the
-re-serialisation trap, `EventId` idempotency, both link token builders, the merchant fee ratio and the
-guarantee it never changes the destination amount, the provider catalogue mapping and the merchant
-ranking on top of it, what the customer was actually charged, the event to order reducer, whether a
-Mesh error means the stored token is dead, and money formatting. Runs in under a second, needs no
-secrets.
+115 tests over the logic where a regression costs something: webhook HMAC verification including the
+re-serialisation trap, `EventId` idempotency, the settlement precedence that stops a late `Pending`
+un-settling a paid order, the check that a delivery describes the order it claims to, both link
+token builders, the merchant fee ratio and the guarantee it never changes the destination amount,
+the provider catalogue mapping and the merchant ranking on top of it, what the customer was actually
+charged, the event to order reducer, whether a Mesh error means the stored token is dead, per
+colourway stock, and money formatting. Runs in under a second, needs no secrets.
 
 The reducer fixtures are trimmed copies of real sandbox payloads, including two failures that actually
 happened: a wallet not present on the device, and an account with nothing eligible.
 
 The provider mapping has its own file because a wrong field name shipped there, reading
 `content.integrations` from an endpoint that returns `content.items`, and a typecheck cannot see
-that. No tests against live Mesh: slow, flaky, needs secrets in CI, and spends the sandbox balance.
+that. `lib/product.test.ts` exists for the same class of problem: stock is per colourway and three
+places read it, so a test holds the size picker, the listing card and the link token route to the
+same numbers rather than trusting them to stay in step. No tests against live Mesh: slow, flaky, needs secrets in CI, and spends the sandbox balance.
 
 ---
 
@@ -608,7 +631,7 @@ is a blank grey box.
 ### Before you demo
 
 ```bash
-curl https://<your-domain>/api/health                  # config.ok, webhookSecret, storage: redis
+curl https://<your-domain>/api/health                  # config.ok, webhookSecret, storageReachable: true
 node scripts/webhook-check.mjs https://<your-domain>   # 5/5
 ```
 
@@ -664,10 +687,9 @@ No cart beyond one item, no accounts, no second Mesh flow, no confetti, no datab
 Redis instance the webhook needs, no component or state library, no mocked success states, no explorer
 link.
 
-What a production build would add, in order: real order persistence and fulfilment; an expected-amount
-check against the webhook before anything is marked settled; refund handling using the `RefundAddress`
-Mesh returns, and the `RefundPending` and `RefundSucceeded` statuses this build reads but does not act
-on; a `userId` derived from a real user record rather than a four-hour cookie; and the onramp flow, so
+What a production build would add, in order: real order persistence and fulfilment; refund handling
+using the `RefundAddress` Mesh returns, and the `RefundPending` and `RefundSucceeded` statuses this
+build records against the order but does not act on; a `userId` derived from a real user record rather than a four-hour cookie; and the onramp flow, so
 a customer holding no crypto at all can still pay.
 
 ---
