@@ -38,6 +38,31 @@ export function Receipt({
   const totalCharged = chargedTotal(order, PRODUCT.price + HANDLING_FEE)
   const meshDisagrees = meshTotalDisagrees(order, PRODUCT.price + HANDLING_FEE)
 
+  /**
+   * The same total in the settlement token, printed under the dollar one whenever a fee is charged.
+   *
+   * Fiat is two decimal places. A withdrawal fee need not be. A real PYUSD payment came back with a
+   * 0.001 fee, and the receipt listed that fee on its own row and then rounded it straight out of
+   * the total: $50.00 price, 0.001 PYUSD fee, $50.00 charged. Not wrong, but it reads as broken,
+   * and the note underneath fired at the same time to explain a difference nothing on screen
+   * showed. The token figure is what the account was actually debited, and it keeps the digits the
+   * dollar figure throws away.
+   *
+   * Only when the fee is quoted in the token that was sent, though. Mesh gives the institution fee
+   * its own currency, and summing a fee denominated in something else and then labelling the result
+   * PYUSD would be a worse lie than the rounding.
+   */
+  const feesCharged = (order.fees.institution ?? 0) + (order.fees.client ?? 0) + (order.fees.gas ?? 0)
+  const feesInSettlementToken =
+    !order.fees.institution || (order.fees.institutionCurrency ?? p.symbol) === p.symbol
+  const tokenTotal =
+    feesCharged > 0 && p.amount !== null && p.symbol !== null && feesInSettlementToken
+      ? token(totalCharged, p.symbol)
+      : null
+
+  /** True when two decimal places cannot show the fee at all, which is the case worth naming. */
+  const fiatHidesFee = totalCharged > PRODUCT.price && usd(totalCharged) === usd(PRODUCT.price)
+
   const rows: { label: string; value: string; mono?: boolean }[] = [
     { label: 'Item', value: `${PRODUCT.brand} ${PRODUCT.name}` },
     { label: 'Colour', value: `${colourway.name} · ${colourway.ref}` },
@@ -114,12 +139,18 @@ export function Receipt({
           style={{ animationDelay: `${rows.length * 55}ms` }}
         >
           <span className="label">Total charged</span>
-          <span className="data text-lg font-semibold">{usd(totalCharged)}</span>
+          <span className="text-right">
+            <span className="data block text-lg font-semibold">{usd(totalCharged)}</span>
+            {tokenTotal && <span className="data block text-xs text-muted">{tokenTotal}</span>}
+          </span>
         </div>
         {totalCharged > PRODUCT.price && (
           <p className="note mt-1">
             The destination address receives {usd(PRODUCT.price)}. The rest is the exchange&apos;s
             withdrawal fee{HANDLING_FEE > 0 ? ' and ours' : ''}, charged on top.
+            {tokenTotal && fiatHidesFee
+              ? ' That fee is smaller than a cent, so the dollar total rounds it off and only the token figure carries it.'
+              : ''}
           </p>
         )}
 
