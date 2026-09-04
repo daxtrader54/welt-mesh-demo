@@ -266,7 +266,20 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
           at,
           [
             { label: 'Amount', value: `${p.amount} ${p.symbol}` },
-            { label: 'Fee', value: `${p.institutionTransferFee?.fee ?? 0} ${p.institutionTransferFee?.feeCurrency ?? ''}`.trim() },
+            {
+              label: 'Exchange fee',
+              value: `${p.institutionTransferFee?.fee ?? 0} ${p.institutionTransferFee?.feeCurrency ?? ''}`.trim()
+            },
+            // Only shown when the merchant actually takes one, so a zero-fee shop is not
+            // cluttered with a row that always reads nothing.
+            ...(p.customClientFee?.fee
+              ? [
+                  {
+                    label: 'Handling fee',
+                    value: `${p.customClientFee.fee} ${p.customClientFee.feeCurrency ?? ''}`.trim()
+                  }
+                ]
+              : []),
             { label: 'Preview', value: p.previewId }
           ]
         )

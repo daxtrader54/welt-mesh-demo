@@ -5,6 +5,17 @@ import { clockTime, maskToken } from '@/lib/format'
 import type { OrderState } from '@/lib/order/state'
 
 /**
+ * How many event types the SDK can emit, counted from
+ * `LINK_EVENT_TYPE_KEYS` in @meshconnect/web-link-sdk@3.12.0.
+ *
+ * It matters because "only eleven events fired" reads like something is filtering them. Nothing
+ * is: every event Mesh sends is logged unaltered. The other thirty-odd belong to flows this shop
+ * does not use, such as wallet verification, onramp funding options and manual QR deposits, or to
+ * steps that genuinely did not happen, like signing in again when a managed token skipped it.
+ */
+const SDK_EVENT_TYPES = 43
+
+/**
  * Behind the payment.
  *
  * Three audiences, one panel. The product lead already has the manifest in plain English on the
@@ -140,6 +151,37 @@ export function TechnicalView({
 }) {
   const [tab, setTab] = useState<Tab>('events')
   const [expanded, setExpanded] = useState<number | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  /** The probe harness had a copy button and it was the most used thing on it. */
+  async function copySession(o: OrderState, c: ServerCall[]) {
+    const at0 = o.log[0]?.at ?? c[0]?.at ?? Date.now()
+    const rel = (t: number) => `+${String(t - at0).padStart(6)}ms`
+    const lines = [
+      `# WELT session, ${new Date().toISOString()}`,
+      `# status=${o.status} source=${o.source?.name ?? '-'} transfer=${o.payment.transferId ?? '-'}`,
+      '',
+      '## Server calls',
+      ...c.map(x => `${rel(x.at)}  ${x.route}${x.ms ? ` (${x.ms}ms)` : ''}${x.mesh ? ` -> ${x.mesh}` : ''}`),
+      '',
+      `## Mesh SDK events (${o.log.length} of ${SDK_EVENT_TYPES} possible types)`,
+      ...o.log.map(e => `${rel(e.at)}  ${e.type}  ${JSON.stringify(e.payload ?? null)}`),
+      '',
+      '## Manifest',
+      ...o.steps.map(
+        st =>
+          `${st.state.padEnd(7)} ${st.label.padEnd(20)} ${st.at ? clockTime(st.at) : '--:--:--'}  ` +
+          st.facts.map(f => `${f.label}=${f.value}`).join(' ')
+      )
+    ]
+    try {
+      await navigator.clipboard.writeText(lines.join('\n'))
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {
+      // Clipboard can be refused without a user gesture or over plain http. Nothing to recover.
+    }
+  }
   const [providers, setProviders] = useState<Provider[] | null>(null)
   const [health, setHealth] = useState<{ storage?: string; config?: { environment?: string } } | null>(null)
 
@@ -196,9 +238,21 @@ export function TechnicalView({
       <div className="flex-1 overflow-auto px-5 py-4">
         {tab === 'events' && (
           <>
-            <p className="note mb-3">
-              Every event the Mesh SDK fired, in order, with its real payload. {order.log.length} so far.
-            </p>
+            <div className="mb-3 flex items-start justify-between gap-4">
+              <p className="note">
+                Every event the Mesh SDK fired, in order, with its real payload. Nothing is
+                filtered: {order.log.length} of the {SDK_EVENT_TYPES} types the SDK can emit have
+                fired in this session. The rest belong to flows this shop does not use, or to steps
+                that did not happen.
+              </p>
+              <button
+                type="button"
+                onClick={() => void copySession(order, calls)}
+                className="btn-quiet shrink-0"
+              >
+                {copied ? 'Copied' : 'Copy log'}
+              </button>
+            </div>
             {order.log.length === 0 && <p className="text-sm text-muted">Nothing yet. Start a payment.</p>}
             <ol>
               {order.log.map((e, i) => (
