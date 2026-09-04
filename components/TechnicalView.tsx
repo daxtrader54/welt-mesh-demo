@@ -235,6 +235,7 @@ export function TechnicalView({
   order,
   calls,
   connection,
+  funding,
   onReset
 }: {
   open: boolean
@@ -243,6 +244,8 @@ export function TechnicalView({
   order: OrderState
   calls: ServerCall[]
   connection: ConnectionSummary | null
+  /** What `configure` said about funding this order from this account. */
+  funding: { status: string | null; error: string | null; assets: number | null }
   onReset: () => void
 }) {
   const [tab, setTab] = useState<Tab>('events')
@@ -392,6 +395,45 @@ export function TechnicalView({
 
         {tab === 'integration' && (
           <>
+            {/**
+             * The answer to "why can I not pay with my BTC", in Mesh's own words.
+             *
+             * `transferBalanceFundingAvailability.status` is the switch. `available` means Mesh
+             * will fund this order by converting other holdings, which is the capability the whole
+             * product story rests on. `disabled` means it is off for this client, and no amount of
+             * work in this codebase will turn it on: it is a conversation with Mesh. Guessing
+             * between those two from a blank column is what this exists to stop.
+             */}
+            <div className="rule-b mb-3 pb-3">
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="label">Funding availability</span>
+                <span
+                  className="data text-xs"
+                  style={{
+                    color:
+                      funding.status === 'available'
+                        ? 'var(--plate-accent)'
+                        : funding.status
+                          ? 'var(--color-warn)'
+                          : undefined
+                  }}
+                >
+                  {funding.status ?? (funding.error ? 'not answered' : '—')}
+                </span>
+              </div>
+              <p className="note mt-1">
+                {funding.status === 'available'
+                  ? `Mesh will fund this order by converting other holdings. ${funding.assets ?? 0} assets assessed.`
+                  : funding.status === 'disabled'
+                    ? 'Conversion funding is switched off for this Mesh client, so only assets already held in an accepted currency can pay. Enabling it is a Mesh account change, not a code change.'
+                    : funding.status
+                      ? `Mesh reported "${funding.status}" for this account and order.`
+                      : funding.error
+                        ? `transfers/managed/configure did not answer: ${funding.error}`
+                        : 'Not asked yet. Connect an account and reach the checkout.'}
+              </p>
+            </div>
+
             <p className="note mb-3">
               The seven routes that carry the integration. The client secret exists only inside
               them, and the browser only ever receives a Link token.
