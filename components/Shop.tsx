@@ -33,6 +33,7 @@ import { Portfolio, type AssetFunding, type Position, type Quote } from './Portf
 import { PretendPaymentModal } from './PretendPayment'
 import { ProductPlate } from './ProductPlate'
 import { ProductPanels } from './Reviews'
+import { History } from './History'
 import { ShopFront } from './ShopFront'
 import { Receipt } from './Receipt'
 import {
@@ -57,7 +58,7 @@ import { LINK_FRAME_ID, preloadMeshLink, useMeshLink } from './useMeshLink'
  * actually funds it comes back on `transferPreviewed` and ends up on the receipt.
  */
 
-type Step = 'shop' | 'product' | 'bag' | 'delivery' | 'checkout' | 'done'
+type Step = 'shop' | 'product' | 'bag' | 'delivery' | 'checkout' | 'done' | 'history'
 
 export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const [step, setStep] = useState<Step>('shop')
@@ -777,6 +778,15 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
             <div className="flex items-baseline gap-6">
               <span className="label hidden md:inline">Free delivery</span>
+              {/* The merchant's view, reachable from the shop rather than buried in a panel. It is
+                  the only screen here that outlives the session. */}
+              <button
+                type="button"
+                onClick={() => goto(step === 'history' ? 'shop' : 'history')}
+                className="btn-quiet"
+              >
+                History
+              </button>
               <button
                 type="button"
                 onClick={() => bag && goto('bag')}
@@ -787,6 +797,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
               </button>
             </div>
           </header>
+
+          {step === 'history' && <History onBack={() => goto('shop')} />}
 
           {step === 'shop' && (
             <ShopFront

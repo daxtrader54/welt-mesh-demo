@@ -288,11 +288,29 @@ The webhook body is **PascalCase**, unlike every other endpoint.
 Register the callback under the **Sandbox** Transfer Webhook Callback URI, not the production one,
 which never fires against a sandbox base URL. The secret is shown once.
 
-**Sandbox delivery is not guaranteed and is visibly intermittent.** Measured across a single
-afternoon: several payments settled within seconds of `transferCompleted`, and several never
-received a delivery at all despite an endpoint proven correct by the local harness minutes earlier.
-Design for it. The receipt must be complete and correct at `paid`, with settlement an upgrade that
-may never arrive, or a demo will look broken for reasons entirely outside your code.
+**Sandbox delivery is not guaranteed and is visibly intermittent.** Design for it. The receipt must
+be complete and correct at `paid`, with settlement an upgrade that may never arrive, or a demo will
+look broken for reasons entirely outside your code.
+
+**And you can prove which it was.** `GET /api/v1/transfers/managed/mesh?IncludeWebhooksLogs=true`
+returns Mesh's own delivery log per transfer: `webhookUri`, `responseCode`, `sentTimestamp`,
+`responseTimestamp` and the payload it sent. That separates three things which are otherwise
+identical from the outside, and only one of them is your fault:
+
+| Delivery log | Meaning |
+|---|---|
+| Absent | Mesh never attempted a delivery. Nothing to fix on your side |
+| Present, `responseCode` not OK | It arrived and you refused it. Usually a signature or a missing secret |
+| Present, `responseCode: OK` | Delivered and accepted |
+
+Measured across the first 25 transfers on this client: **14 delivered, 2 refused, 9 never
+attempted.** The two refusals are real 401s from before the webhook secret was configured, which is
+the endpoint working correctly. The nine are Mesh. Without this endpoint all eleven look like the
+same bug, and the nine look like yours.
+
+Worth wiring into any integration before you spend an afternoon debugging an endpoint that was
+never called. `responseMessage` is not worth storing: it echoes your own response body and every
+header you set, which is several hundred bytes of CSP per delivery.
 
 `scripts/webhook-check.mjs` in this repo proves the endpoint without waiting for Mesh: signed
 delivery accepted, replay deduplicated, forged signature refused, unsigned refused, and the same

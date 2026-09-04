@@ -388,6 +388,11 @@ export type MeshTransfer = {
   from: string | null
   /** One per leg. `from` differing from `to` is a conversion, stated by Mesh after the fact. */
   funding: { type: string; from: string | null; to: string | null; fromAmount: number | null }[]
+  /**
+   * Mesh's delivery attempts. Empty means it never tried, which is a different problem from an
+   * attempt we rejected, and the two were indistinguishable from our side until now.
+   */
+  webhooks: { code: string | null; uri: string | null; sentAt: number | null }[]
 }
 
 /**
@@ -408,6 +413,7 @@ export async function listTransfers(count = 25): Promise<MeshCall<{ items: MeshT
     url.searchParams.set('Count', String(count))
     url.searchParams.set('OrderBy', 'createdTimestamp')
     url.searchParams.set('DescendingOrder', 'true')
+    url.searchParams.set('IncludeWebhooksLogs', 'true')
 
     const res = await fetch(url, {
       headers: { 'X-Client-Id': env.clientId, 'X-Client-Secret': env.apiKey },
@@ -449,6 +455,16 @@ export async function listTransfers(count = 25): Promise<MeshCall<{ items: MeshT
             from: f.fromSymbol ?? null,
             to: f.toSymbol ?? null,
             fromAmount: f.fromAmount ?? null
+          })),
+          /**
+           * `responseMessage` is deliberately dropped. It carries our own response body and every
+           * response header we set, which is several hundred bytes of CSP per delivery and tells
+           * nobody anything the code does not.
+           */
+          webhooks: (t.webhookLogs ?? []).map(w => ({
+            code: w.responseCode ?? null,
+            uri: w.webhookUri ?? null,
+            sentAt: w.sentTimestamp ? w.sentTimestamp * 1000 : null
           }))
         }))
       }
