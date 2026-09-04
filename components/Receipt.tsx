@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { token, truncate, usd } from '@/lib/format'
 import { HANDLING_FEE, PRODUCT, type Colourway } from '@/lib/product'
-import { chargedTotal, meshTotalDisagrees, type OrderState } from '@/lib/order/state'
+import { chargedTotal, describeFundingType, meshTotalDisagrees, type OrderState } from '@/lib/order/state'
 import { formatAddress, type Address } from './Delivery'
 
 /**
@@ -73,6 +73,23 @@ export function Receipt({
      * $50.00 price and a $50.01 total with nothing on screen accounting for the difference, which
      * is the one thing a receipt exists to prevent.
      */
+    /**
+     * Where the money actually came from, when it was not simply the asset being sent.
+     *
+     * This is the line the whole integration exists to produce. Someone holding BTC and no USDC
+     * buys a dollar-priced pair of trainers, Mesh converts on the way through, and the merchant is
+     * paid in the asset it asked for. A receipt that prints the destination and stays quiet about
+     * that has hidden the interesting half of the transaction.
+     */
+    ...order.funding
+      .filter(f => f.type !== 'existingCryptocurrencyBalance')
+      .map(f => ({
+        label: 'Funded by',
+        value: f.symbol
+          ? `${describeFundingType(f.type)} ${f.amountInCrypto ? `${token(f.amountInCrypto)} ` : ''}${f.symbol}`
+          : describeFundingType(f.type),
+        mono: false
+      })),
     ...(order.fees.institution
       ? [
           {
