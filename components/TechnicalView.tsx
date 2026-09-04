@@ -67,8 +67,8 @@ type Provider = {
 /**
  * The routes that carry the integration.
  *
- * Nine route files exist. `GET /api/health` and `POST /api/session/reset` are demo scaffolding and
- * are left out, which leaves the seven below. Each is listed by the method that does the work, so
+ * Ten route files exist. `GET /api/health` and `POST /api/session/reset` are demo scaffolding and
+ * are left out, which leaves the eight below. Each is listed by the method that does the work, so
  * `/api/mesh/connection` appears as its POST (its GET is the returning-shopper check) and
  * `/api/orders/:id` as its PATCH (its GET is the settlement poll).
  */
@@ -87,6 +87,11 @@ const ROUTES: { route: string; does: string; mesh: string | null }[] = [
     route: 'GET /api/mesh/providers',
     does: 'Who could fund this, and who Link will offer',
     mesh: 'GET /api/v1/transfers/managed/integrations + /integrations'
+  },
+  {
+    route: 'GET /api/mesh/transfers',
+    does: "Mesh's ledger, and whether each webhook was delivered",
+    mesh: 'GET /api/v1/transfers/managed/mesh'
   }
 ]
 
@@ -551,7 +556,7 @@ export function TechnicalView({
             </div>
 
             <p className="note mb-3">
-              The seven routes that carry the integration. The client secret exists only inside
+              The eight routes that carry the integration. The client secret exists only inside
               them, and the browser only ever receives a Link token.
             </p>
             <ul>

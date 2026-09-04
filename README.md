@@ -83,7 +83,7 @@ which variables are present, without values, and whether the store is Redis or m
 ### Scripts
 
 ```bash
-npm test                                    # 86 tests, no secrets, under a second
+npm test                                    # 91 tests, no secrets, under a second
 npm run typecheck
 node scripts/webhook-check.mjs <url>        # prove the webhook endpoint without waiting for Mesh
 node scripts/crop-product-images.mjs        # re-frame the photographs from public/product-src
@@ -110,13 +110,14 @@ why the exchange auth token reaches client JavaScript at all.
 
 ```
 app/
-  page.tsx                     the shop, one route, five internal steps
+  page.tsx                     the shop, one route, seven internal steps including history
   error.tsx  not-found.tsx     branded failure and 404
   api/mesh/link-token          mints connect and payment tokens
   api/mesh/connection          takes custody of the auth token; reports an existing one
   api/mesh/portfolio           holdings, normalised
   api/mesh/quotes              per-asset eligibility, fees and funding sources
   api/mesh/providers           who could fund this, who Link will offer, and which to default to
+  api/mesh/transfers           Mesh's own ledger, with its webhook delivery logs
   api/mesh/webhook             raw body, HMAC, idempotent settlement
   api/orders/[id]              order state, owned by the session that created it
   api/session/reset            clears the order, keeps the connection
@@ -129,7 +130,7 @@ components/ shop, listing, plate, checkout, portfolio, bag, receipt, technical p
 scripts/    webhook-check, crop-product-images
 ```
 
-Nine route files. Seven carry the integration; `health` and `session/reset` exist for the demo.
+Ten route files. Eight carry the integration; `health` and `session/reset` exist for the demo.
 Everything runs on the Node runtime, not edge: `crypto.createHmac` needs it and the Mesh calls are
 simpler there.
 
@@ -137,7 +138,7 @@ simpler there.
 
 ## The Mesh integration
 
-Six endpoints, all server side, all with `X-Client-Id` and `X-Client-Secret`.
+Eight endpoints, all server side, all with `X-Client-Id` and `X-Client-Secret`.
 
 ### Link token
 
@@ -288,7 +289,7 @@ does not appear, nothing arrived.
 
 ## For the merchant's engineer
 
-**Yours:** seven route files, one of them a webhook. A key/value store for the order and for webhook
+**Yours:** eight route files, one of them a webhook. A key/value store for the order and for webhook
 idempotency. A page that reacts to SDK events. That is the whole integration.
 
 **Mesh's:** the provider catalogue, OAuth and MFA for every exchange, asset and network eligibility,
@@ -310,6 +311,27 @@ is covered under Security.
 quoted by Mesh in the preview: 0.01 USDC in sandbox, with gas at 0. Separately, `clientFee` is your
 own cut. Neither changes what lands at the destination. The receipt shows the arithmetic rather than
 a total that does not add up.
+
+---
+
+### The ledger, and why a webhook did not arrive
+
+`GET /api/v1/transfers/managed/mesh` is Mesh's own record of every transfer it has made for a
+client, and it is the only view here that outlives a session. The **History** page in the shop's own
+header reads it: date, amount, source, network, fees, the funding legs, and the reference.
+
+Ask for it with `IncludeWebhooksLogs=true` and each transfer carries Mesh's delivery attempts, which
+separates three things that look identical from a merchant's side:
+
+| Delivery log | What it means |
+|---|---|
+| Absent | Mesh never attempted a delivery. Nothing to fix on your side |
+| Present, `responseCode` not OK | It arrived and you refused it. Signature, or a missing secret |
+| Present, `responseCode: OK` | Delivered and accepted |
+
+Measured on this client: 14 delivered, 2 refused, 9 never attempted. The two refusals are genuine
+401s from before the webhook secret was set, which is the endpoint working. The nine are Mesh. Worth
+wiring in before spending an afternoon debugging an endpoint that was never called.
 
 ---
 
@@ -530,7 +552,7 @@ Three that are non-obvious:
 
 ## Testing
 
-86 tests over the logic where a regression costs something: webhook HMAC verification including the
+91 tests over the logic where a regression costs something: webhook HMAC verification including the
 re-serialisation trap, `EventId` idempotency, both link token builders, the merchant fee ratio and the
 guarantee it never changes the destination amount, the provider catalogue mapping and the merchant
 ranking on top of it, what the customer was actually charged, the event to order reducer, whether a

@@ -108,6 +108,17 @@ secret is visible from the app rather than only from curl.
 
 Working tree clean, everything pushed and live. 91 tests, typecheck and build clean.
 
+Since the last update, all committed and deployed:
+
+- **The root cause of "Unable to initiate the transfer"**: we replayed a stored account into connect
+  sessions, whose whole purpose is to find one. Never sent on connect now.
+- **A History page** in the shop header, reading Mesh's own ledger, with the webhook delivery log
+  per transfer. That is what showed 9 of 25 settlements were never attempted by Mesh at all.
+- **`transfers/managed/configure`** wired in, which is the only call that answers about the account
+  rather than the broker.
+- The confirmation and the listing both rebuilt classic, the drawn logo trimmed and used, the
+  address editable from the bag and clearable from the panel.
+
 ## Known, not fixed
 
 - Three dead exports left over from the change that made reset keep the connection:
