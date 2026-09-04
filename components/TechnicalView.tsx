@@ -41,6 +41,20 @@ export type ConnectionSummary = {
   authTokenMasked: string
 }
 
+type Transfer = {
+  id: string | null
+  reference: string | null
+  status: string
+  amount: number | null
+  symbol: string | null
+  feesInFiat: number | null
+  network: string | null
+  hash: string | null
+  at: number | null
+  from: string | null
+  funding: { type: string; from: string | null; to: string | null; fromAmount: number | null }[]
+}
+
 type Provider = {
   id: string
   name: string
@@ -183,7 +197,7 @@ export function ConsoleBar({
   )
 }
 
-type Tab = 'events' | 'integration' | 'providers' | 'build' | 'demo'
+type Tab = 'events' | 'integration' | 'ledger' | 'providers' | 'build' | 'demo'
 
 /**
  * How the thing was put together, for the person who asks after the demo rather than during it.
@@ -254,6 +268,7 @@ export function TechnicalView({
 }) {
   const [tab, setTab] = useState<Tab>('events')
   const [expanded, setExpanded] = useState<number | null>(null)
+  const [ledger, setLedger] = useState<{ items: Transfer[]; total: number } | null>(null)
   const [copied, setCopied] = useState(false)
 
   /** The probe harness had a copy button and it was the most used thing on it. */
@@ -311,6 +326,12 @@ export function TechnicalView({
 
   useEffect(() => {
     if (!open) return
+    if (tab === 'ledger' && !ledger) {
+      fetch('/api/mesh/transfers')
+        .then(r => r.json())
+        .then(j => j.ok && setLedger({ items: j.transfers ?? [], total: j.total ?? 0 }))
+        .catch(() => {})
+    }
     if (tab === 'providers' && !providers) {
       fetch('/api/mesh/providers')
         .then(r => r.json())
@@ -320,7 +341,7 @@ export function TechnicalView({
     if (tab === 'demo' && !health) {
       fetch('/api/health').then(r => r.json()).then(setHealth).catch(() => setHealth({}))
     }
-  }, [open, tab, providers, health])
+  }, [open, tab, providers, health, ledger])
 
   useEffect(() => {
     if (!open || docked) return
@@ -341,7 +362,7 @@ export function TechnicalView({
       </div>
 
       <nav className="rule-b flex gap-4 px-5">
-        {(['events', 'integration', 'providers', 'build', 'demo'] as Tab[]).map(t => (
+        {(['events', 'integration', 'ledger', 'providers', 'build', 'demo'] as Tab[]).map(t => (
           <button
             key={t}
             type="button"
@@ -592,6 +613,79 @@ export function TechnicalView({
                 </p>
               </div>
             </div>
+          </>
+        )}
+
+        {tab === 'ledger' && (
+          <>
+            {/**
+             * Mesh's own record, not ours.
+             *
+             * Everything else in this panel comes from the session you just watched, which is
+             * exactly what a browser knows and no more. This is the ledger a merchant reconciles
+             * against: every transfer Mesh has made for this client, with the funding legs it used,
+             * still there after the tab closes and the webhook was missed.
+             *
+             * `fundingMethods` is the row worth reading. Each leg carries the symbol in and the
+             * symbol out, so a conversion is stated by Mesh after the fact rather than inferred by
+             * us beforehand.
+             */}
+            <p className="note mb-3">
+              Every transfer Mesh has made for this client, from its own ledger rather than this
+              session. Client-scoped, so it lists the whole integration and not one shopper, which
+              is right for a demo panel and would be wrong in a real shop.
+            </p>
+
+            {!ledger ? (
+              <p className="text-sm text-muted">Reading the ledger…</p>
+            ) : (
+              <>
+                <div className="rule-b flex items-baseline justify-between pb-2">
+                  <span className="label">{ledger.total} transfers</span>
+                  <span className="note">
+                    {ledger.items.filter(t => t.status === 'succeeded').length} succeeded
+                  </span>
+                </div>
+                <ul>
+                  {ledger.items.map((t, i) => {
+                    const converted = t.funding.some(f => f.from && f.to && f.from !== f.to)
+                    return (
+                      <li key={t.id ?? i} className="rule-b py-2">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="data text-xs">
+                            {t.at ? new Date(t.at).toISOString().slice(5, 16).replace('T', ' ') : '—'}
+                          </span>
+                          <span className="data text-xs">
+                            {t.amount} {t.symbol}
+                          </span>
+                          <span
+                            className="note shrink-0"
+                            style={{
+                              color:
+                                t.status === 'succeeded'
+                                  ? 'var(--plate-accent)'
+                                  : t.status === 'failed'
+                                    ? 'var(--color-warn)'
+                                    : undefined
+                            }}
+                          >
+                            {t.status}
+                          </span>
+                        </div>
+                        <div className="note mt-0.5">
+                          {t.from ?? '—'} · {t.network ?? '—'}
+                          {t.feesInFiat ? ` · fee ${t.feesInFiat}` : ''}
+                          {/* The one that would prove the conversion story if it ever happened. */}
+                          {converted
+                            ? ` · converted ${t.funding.map(f => `${f.from}→${f.to}`).join(', ')}`
+                            : ''}
+                        </div>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </>
+            )}
           </>
         )}
 

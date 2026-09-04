@@ -107,6 +107,52 @@ export const configureResponse = envelope.extend({
 
 export type ConfigureResponse = z.infer<typeof configureResponse>
 
+/**
+ * `GET /api/v1/transfers/managed/mesh`, Mesh's own ledger of everything it has moved for this
+ * client. The answer to "where did my thirty payments go", and the only place a merchant can
+ * reconcile without trusting a browser or a webhook they might have missed.
+ *
+ * `fundingMethods` is the field worth having: one entry per leg, with `fromSymbol` and `toSymbol`.
+ * When they differ, that is a conversion, recorded after the fact rather than inferred.
+ */
+export const transfersResponse = envelope.extend({
+  content: z
+    .object({
+      total: z.number().nullish(),
+      hasMorePages: z.boolean().nullish(),
+      items: z
+        .array(
+          z.object({
+            id: z.string().nullish(),
+            clientTransactionId: z.string().nullish(),
+            status: z.string().nullish(),
+            amount: z.number().nullish(),
+            symbol: z.string().nullish(),
+            amountInFiat: z.number().nullish(),
+            totalFeesAmountInFiat: z.number().nullish(),
+            networkName: z.string().nullish(),
+            hash: z.string().nullish(),
+            createdTimestamp: z.number().nullish(),
+            transferType: z.string().nullish(),
+            from: z.object({ name: z.string().nullish(), type: z.string().nullish() }).nullish(),
+            fundingMethods: z
+              .array(
+                z.object({
+                  type: z.string().nullish(),
+                  fromSymbol: z.string().nullish(),
+                  toSymbol: z.string().nullish(),
+                  fromAmount: z.number().nullish(),
+                  amountInFiat: z.number().nullish()
+                })
+              )
+              .nullish()
+          })
+        )
+        .nullish()
+    })
+    .nullish()
+})
+
 export type LinkTokenResponse = z.infer<typeof linkTokenResponse>
 export type HoldingsResponse = z.infer<typeof holdingsResponse>
 export type HoldingsValueResponse = z.infer<typeof holdingsValueResponse>
