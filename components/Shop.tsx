@@ -123,6 +123,12 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const [quotes, setQuotes] = useState<Quote[] | null>(null)
   /** Mesh's per-holding answer for this account, from configure. Null when it could not be asked. */
   const [assetFunding, setAssetFunding] = useState<AssetFunding[] | null>(null)
+  /** Mesh's verdict on whether it will fund this order by converting. Shown in the panel. */
+  const [fundingStatus, setFundingStatus] = useState<{
+    status: string | null
+    error: string | null
+    assets: number | null
+  }>({ status: null, error: null, assets: null })
   /** Which asset the shopper picked. Decides the single destination sent to Mesh. */
   const [asset, setAsset] = useState<string | null>(null)
 
@@ -190,6 +196,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     setPositions([])
     setQuotes([])
     setAssetFunding(null)
+    setFundingStatus({ status: null, error: null, assets: null })
     setPickedIntegrationId(null)
     try {
       await fetch('/api/mesh/connection', { method: 'DELETE' })
@@ -272,7 +279,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
             qjson.fundingMs ?? null,
             Boolean(qjson.funding)
           )
-          if (qjson.fundingError) console.warn('[welt] configure:', qjson.fundingError)
+          setFundingStatus({
+            status: qjson.fundingStatus ?? null,
+            error: qjson.fundingError ?? null,
+            assets: qjson.funding?.length ?? null
+          })
           // Default to the first thing that can actually pay, preferring the settlement asset.
           const best =
             qjson.quotes.find((q: Quote) => q.eligible && q.primary) ??
@@ -1258,6 +1269,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         order={order}
         calls={calls}
         connection={connection}
+        funding={fundingStatus}
         onReset={reset}
       />
       <TechnicalView
@@ -1267,6 +1279,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         order={order}
         calls={calls}
         connection={connection}
+        funding={fundingStatus}
         onReset={reset}
       />
     </div>
