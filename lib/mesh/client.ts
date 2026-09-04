@@ -312,16 +312,32 @@ export type TransferConfig = {
 export async function configureTransfer(
   authToken: string,
   brokerType: string,
-  amountInFiat: number,
   destinations: { networkId: string; symbol: string; address: string }[]
 ): Promise<MeshCall<TransferConfig>> {
   const res = await meshPost(
     '/api/v1/transfers/managed/configure',
+    /**
+     * `amountInFiat` is deliberately not sent, and that is the interesting part.
+     *
+     * Mesh documents it as "configures the response to only contain holdings with enough value",
+     * and with it set to 50 this returned three holdings for an account with fourteen positions.
+     * The three happened to be the merchant's three accepted assets, which made it look like the
+     * response simply echoes `toAddresses`. Mesh's own documented example disproves that: it sends
+     * USDT and BTC destinations and gets a USDC holding back, a symbol that appears nowhere in the
+     * request.
+     *
+     * So the narrowing was either that filter or genuine reachability, and those have opposite
+     * meanings. Without the filter, an account holding $398,000 of BTC either reports BTC with an
+     * eligibility flag, which answers whether it can pay, or still does not, which says BTC cannot
+     * reach a USDC destination on this account and conversion is not available here.
+     *
+     * `toAddresses` still carries the destinations, so eligibility is still assessed against this
+     * merchant. Only the value filter is gone.
+     */
     {
       fromAuthToken: authToken,
       fromType: brokerType,
       toAddresses: destinations,
-      amountInFiat,
       fiatCurrency: 'USD'
     },
     configureResponse
