@@ -129,7 +129,7 @@ describe('the happy path', () => {
     const s = reduceOrder(happyPath(), { type: 'settled', at: T + 9000, txHash: null })
     expect(s.status).toBe('settled')
     expect(step(s, 'settled').state).toBe('done')
-    expect(step(s, 'settled').facts).toContainEqual({ label: 'Confirmed by', value: 'Mesh webhook' })
+    expect(step(s, 'settled').facts).toContainEqual({ label: 'Confirmed by', value: 'Mesh webhook, server to server' })
   })
 })
 

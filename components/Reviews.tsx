@@ -32,7 +32,17 @@ const REVIEWS = [
   }
 ]
 
-const AVERAGE = 4.7
+/**
+ * Computed, not typed in. A hand-written 4.7 beside three reviews averaging 4.67 is a small lie
+ * that costs nothing to avoid, and the count travels with it everywhere it is shown so nobody can
+ * mistake three sample reviews for a shop's trading record.
+ */
+export const RATING = {
+  average: Math.round((REVIEWS.reduce((t, r) => t + r.stars, 0) / REVIEWS.length) * 10) / 10,
+  count: REVIEWS.length
+}
+
+const AVERAGE = RATING.average
 
 /**
  * Filled against outline, not colour against colour. The previous version drew filled stars in the
@@ -40,7 +50,7 @@ const AVERAGE = 4.7
  * the two: four stars and five stars were indistinguishable, and identical outright to anyone with
  * a red-green deficiency.
  */
-function Stars({ n }: { n: number }) {
+export function Stars({ n }: { n: number }) {
   return (
     <span
       role="img"

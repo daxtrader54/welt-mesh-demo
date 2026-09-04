@@ -108,6 +108,16 @@ export type OrderState = {
    * screen the way a `failure` does.
    */
   warning: Failure | null
+  /**
+   * The verified webhook delivery, once one arrives. Deliberately not in `log`, which is the SDK
+   * event stream and must stay exactly that: this one never touched the browser.
+   */
+  webhook: {
+    eventId: string | null
+    transferStatus: string | null
+    receivedAt: number
+    txHash: string | null
+  } | null
   /** Every SDK event, in order, for the technical view. */
   log: { at: number; type: string; payload: unknown }[]
 }
@@ -147,6 +157,7 @@ export function initialOrderState(): OrderState {
     funding: [],
     failure: null,
     warning: null,
+    webhook: null,
     log: []
   }
 }
@@ -167,7 +178,22 @@ export type OrderEvent =
    * "the token we handed it is dead" from "the session expired".
    */
   | { type: 'link'; at: number; event: LinkEventType; reusedTokens?: boolean }
-  | { type: 'settled'; at: number; txHash?: string | null }
+  /**
+   * The verified webhook, as it was received. Carried onto the manifest because "confirmed by Mesh
+   * webhook" is a claim, and the EventId and status are the evidence for it. This is the only fact
+   * in the whole trace that did not come through the browser.
+   */
+  | {
+      type: 'settled'
+      at: number
+      txHash?: string | null
+      webhook?: {
+        eventId?: string
+        transferStatus?: string
+        receivedAt?: number
+        txHash?: string
+      } | null
+    }
   | { type: 'settlement:timeout'; at: number; reason: string }
   | { type: 'failed'; at: number; failure: Failure }
   /** Dismiss a failure without discarding the trace, which is the interesting part after one. */
@@ -252,15 +278,30 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
         status: state.status === 'failed' ? (state.source ? 'connected' : 'draft') : state.status
       }
 
-    case 'settled':
+    case 'settled': {
+      const w = action.webhook
       return {
         ...state,
         status: 'settled',
+        webhook: w
+          ? {
+              eventId: w.eventId ?? null,
+              transferStatus: w.transferStatus ?? null,
+              receivedAt: w.receivedAt ?? action.at,
+              txHash: w.txHash ?? null
+            }
+          : state.webhook,
         payment: { ...state.payment, txHash: action.txHash ?? state.payment.txHash },
         steps: mark(state.steps, 'settled', 'done', action.at, [
-          { label: 'Confirmed by', value: 'Mesh webhook' }
+          { label: 'Confirmed by', value: 'Mesh webhook, server to server' },
+          ...(w?.transferStatus ? [{ label: 'TransferStatus', value: w.transferStatus }] : []),
+          ...(w?.eventId ? [{ label: 'EventId', value: w.eventId, technical: true }] : []),
+          ...(w?.receivedAt
+            ? [{ label: 'Received', value: new Date(w.receivedAt).toISOString(), technical: true }]
+            : [])
         ])
       }
+    }
 
     case 'settlement:timeout':
       // Not a failure. The order is paid. This says plainly why row seven is still open, which

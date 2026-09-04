@@ -552,7 +552,12 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
             Date.now() - started,
             true
           )
-          dispatch({ type: 'settled', at: Date.now(), txHash: json.order.txHash })
+          dispatch({
+            type: 'settled',
+            at: Date.now(),
+            txHash: json.order.txHash,
+            webhook: json.order.webhook ?? null
+          })
           return
         }
         // Only the last unsuccessful poll is logged, so twelve identical lines do not bury the run.
