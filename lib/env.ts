@@ -45,8 +45,12 @@ export function meshEnv(): MeshEnv {
   const missing = REQUIRED.filter(key => !process.env[key]?.trim())
   if (missing.length) throw new ConfigError(missing)
 
-  const redisUrl = process.env.UPSTASH_REDIS_REST_URL?.trim()
-  const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim()
+  // Two namings for the same thing. Upstash's own dashboard gives UPSTASH_REDIS_REST_*, while
+  // adding it through the Vercel Marketplace injects KV_REST_API_*. Both are the same REST
+  // endpoint and the same client, so accept either rather than making someone rename variables
+  // Vercel set for them.
+  const redisUrl = (process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL)?.trim()
+  const redisToken = (process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN)?.trim()
 
   cached = {
     clientId: process.env.MESH_CLIENT_ID!.trim(),
@@ -74,7 +78,9 @@ export function configStatus() {
     environment: isSandbox ? ('sandbox' as const) : ('production' as const),
     optional: {
       webhookSecret: present('MESH_WEBHOOK_SECRET'),
-      redis: present('UPSTASH_REDIS_REST_URL') && present('UPSTASH_REDIS_REST_TOKEN'),
+      redis:
+        (present('UPSTASH_REDIS_REST_URL') && present('UPSTASH_REDIS_REST_TOKEN')) ||
+        (present('KV_REST_API_URL') && present('KV_REST_API_TOKEN')),
       coinbaseDeepLink: present('MESH_COINBASE_INTEGRATION_ID')
     }
   }
