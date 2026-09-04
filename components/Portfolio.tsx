@@ -76,8 +76,24 @@ export function Portfolio({
   onSelect: (symbol: string) => void
 }) {
   const quoteFor = (symbol?: string | null) => quotes?.find(q => q.symbol === symbol) ?? null
-  const payable = positions.filter(p => quoteFor(p.symbol)?.eligible)
-  const rest = positions.filter(p => !quoteFor(p.symbol)?.eligible)
+
+  /**
+   * Three answers, not two. Mesh says yes, says no with a reason, or does not answer at all.
+   *
+   * The quotes route is careful to report an unanswered quote as `eligible: null` rather than
+   * false, precisely so a failed call cannot be read as a refusal. This component then treated
+   * null as falsy and threw that away, so a quote outage produced "Nothing in this account can
+   * settle $50.00" beside 9,397 USDC, and the asset picker vanished because it only lists
+   * confirmed assets. Unknown now falls back to what the merchant accepts and the shopper actually
+   * holds, which is choosable with the uncertainty stated rather than hidden.
+   */
+  const payable = positions.filter(p => quoteFor(p.symbol)?.eligible === true)
+  const unpriced = positions.filter(
+    p => quoteFor(p.symbol)?.eligible === null && p.amount > 0
+  )
+  const choosable = payable.length ? payable : unpriced
+  const chosenSymbols = new Set(choosable.map(p => p.symbol))
+  const rest = positions.filter(p => !chosenSymbols.has(p.symbol))
 
   return (
     <section className="rule-t pt-5">
@@ -95,15 +111,16 @@ export function Portfolio({
         )}
       </div>
 
-      {payable.length > 0 && (
+      {choosable.length > 0 && (
         <>
           <p className="note mt-5">
-            Pay with any of these. The merchant receives {usd(PRODUCT.price)} on{' '}
-            {PRODUCT.settlement.network} either way.
+            {payable.length
+              ? `Pay with any of these. The merchant receives ${usd(PRODUCT.price)} on ${PRODUCT.settlement.network} either way.`
+              : `Mesh could not price these in advance for this account, so eligibility is not confirmed here. Pick one and Mesh checks it before taking anything.`}
           </p>
 
           <ul className="mt-2">
-            {payable.map(p => {
+            {choosable.map(p => {
               const q = quoteFor(p.symbol)!
               const active = selected === p.symbol
               const funding = describeFunding(q)
@@ -151,7 +168,8 @@ export function Portfolio({
         <p className="note mt-4">Checking which of these can pay for this order…</p>
       )}
 
-      {quotes !== null && payable.length === 0 && (
+      {/* Only when Mesh actually answered. An unanswered quote is not a refusal. */}
+      {quotes !== null && choosable.length === 0 && (
         <p className="mt-4 text-sm text-muted">
           Nothing in this account can settle {usd(PRODUCT.price)} on {PRODUCT.settlement.network}.
           You can still continue and choose a different account.

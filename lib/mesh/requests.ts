@@ -95,3 +95,27 @@ export function buildPaymentTokenBody(input: PaymentTokenInput): LinkTokenBody {
   if (input.integrationId) body.integrationId = input.integrationId
   return body
 }
+
+/**
+ * The broker type `transfers/managed/quote` will accept.
+ *
+ * That endpoint takes production broker types only. A sandbox Coinbase connection reports itself
+ * as `sandboxCoinbase` everywhere else in the API, and holdings/get requires exactly that string,
+ * but the quote endpoint answers it with HTTP 400 "Broker SandboxCoinbase not supported."
+ *
+ * So every quote in every sandbox run failed. The shop then showed "Nothing in this account can
+ * settle $50.00 on Ethereum" directly above a panel reading 9,397 USDC and "Enough USDC to cover
+ * this order", and the asset picker never appeared at all, because it only lists assets Mesh has
+ * confirmed. Stripping the prefix gives `coinbase`, which returns `isEligible: true`.
+ *
+ * Plain `sandbox`, which is what the sandbox Binance entry reports, has nothing underneath it and
+ * is passed through unchanged. The quote endpoint does not accept `binance` either, so there is no
+ * production name to map it to and an honest unknown is the right answer.
+ */
+export function quoteBrokerType(brokerType: string): string {
+  // Only strip when a capital follows, which is the naming convention Mesh actually uses. A bare
+  // `sandbox`, or any name that merely starts with those letters, is left exactly as it is.
+  const stripped = brokerType.replace(/^sandbox(?=[A-Z])/, '')
+  if (stripped === brokerType) return brokerType
+  return stripped.charAt(0).toLowerCase() + stripped.slice(1)
+}

@@ -12,6 +12,7 @@ import {
 import {
   buildConnectTokenBody,
   buildPaymentTokenBody,
+  quoteBrokerType,
   type ConnectTokenInput,
   type PaymentTokenInput
 } from './requests'
@@ -245,7 +246,8 @@ export async function getQuote(
       symbol,
       networkId: env.merchantNetworkId,
       toAddress: env.merchantAddress,
-      brokerType
+      // Production broker types only here, unlike every other endpoint. See quoteBrokerType.
+      brokerType: quoteBrokerType(brokerType)
     },
     quoteResponse
   )
@@ -260,9 +262,18 @@ export async function getQuote(
       symbol,
       eligible: c?.isEligible ?? false,
       reason: c?.ineligibilityReason ?? null,
-      feesInFiat: c?.fees?.totalFeesInFiat ?? null,
+      /**
+       * The lower bound of Mesh's range, which is what paying from a balance you already hold
+       * costs. The upper bound assumes Mesh has to buy the asset for you first.
+       *
+       * Not shown as the amount that will be charged, and deliberately. The quote is priced
+       * against the production broker (see `quoteBrokerType`) while the sandbox transfer charges
+       * its own fee, which was 0.01 USDC. Quoting one and charging the other would be worse than
+       * saying nothing, so this informs the fee note rather than printing a number.
+       */
+      feesInFiat: c?.fees?.inFiat?.minFeesFiat ?? null,
       funding: (c?.fundingOptions ?? []).map(f => ({
-        type: f.cryptocurrencyFundingOptionType ?? 'unknown',
+        type: f.fundingOption ?? 'unknown',
         method: f.paymentMethodType ?? null
       }))
     }
