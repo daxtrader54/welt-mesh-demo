@@ -44,7 +44,17 @@ export function FundingNote() {
   // principle. Promising Kraken on a screen whose next step cannot show Kraken is worse than a
   // shorter list.
   const here = unique(providers.filter(p => p.canPay && p.sandboxAvailable).map(p => p.name))
-  const elsewhere = unique(providers.filter(p => p.canPay && !p.sandboxAvailable).map(p => p.name))
+  /**
+   * Deduplicated across the buckets, not just within them.
+   *
+   * Coinbase and Binance each appear in the catalogue as several integration types, some sandbox
+   * and some not, so they landed in both lists and the sentence read "Coinbase and Binance can
+   * fund this payment. Coinbase, Binance, Kraken, Robinhood, CashApp and Uphold can too, in
+   * production." Two brands, two verdicts, one after the other.
+   */
+  const elsewhere = unique(
+    providers.filter(p => p.canPay && !p.sandboxAvailable).map(p => p.name)
+  ).filter(name => !here.includes(name))
   const wallets = unique(providers.filter(p => p.sandboxAvailable && !p.canPay).map(p => p.name))
 
   if (!here.length && !elsewhere.length) return null
@@ -57,7 +67,7 @@ export function FundingNote() {
           {PRODUCT.settlement.network}.{' '}
         </>
       )}
-      {elsewhere.length > 0 && <>{list(elsewhere)} can too, in production. </>}
+      {elsewhere.length > 0 && <>{list(elsewhere)} can too, on a live account. </>}
       {wallets.length > 0 && (
         <>
           {list(wallets)} will connect but hold testnet assets only in the sandbox, so they cannot

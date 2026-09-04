@@ -2,7 +2,7 @@ import { z } from 'zod'
 import { failure } from '@/lib/failure'
 import { fail, guard, ok, readJson } from '@/lib/http'
 import { readSessionId } from '@/lib/session'
-import { getOrder, getSettlement, putOrder } from '@/lib/store/records'
+import { type OrderRecord, getOrder, getRefund, getSettlement, putOrder } from '@/lib/store/records'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -25,10 +25,26 @@ async function owned(id: string) {
   return order && sid && order.sid === sid ? order : null
 }
 
+/**
+ * The order as the browser is allowed to see it.
+ *
+ * `sid` is the value of the httpOnly session cookie. Spreading the whole record put it in a JSON
+ * body the page reads every few seconds, which hands it to any script on the page and undoes the
+ * one thing httpOnly is for. Nothing in the UI ever needed it.
+ */
+function forBrowser(order: OrderRecord) {
+  const { sid: _sid, ...rest } = order
+  return rest
+}
+
 export async function GET(_req: Request, ctx: Ctx) {
   return guard(async () => {
     const { id } = await ctx.params
-    const [order, settlement] = await Promise.all([owned(id), getSettlement(id)])
+    const [order, settlement, refund] = await Promise.all([
+      owned(id),
+      getSettlement(id),
+      getRefund(id)
+    ])
     if (!order) {
       return fail(
         failure('unknown', { title: 'We cannot find that order', detail: `No order ${id}` }),
@@ -37,19 +53,17 @@ export async function GET(_req: Request, ctx: Ctx) {
     }
 
     // Settlement is the webhook's fact and lives in its own key, so it is merged on read rather
-    // than written into a record the browser also updates.
+    // than written into a record the browser also updates. A refund is a separate fact in a
+    // separate key, because it describes what happened after settlement rather than replacing it.
     const settled = settlement?.transferStatus === 'Succeeded'
-    const refunded =
-      settlement?.transferStatus === 'RefundSucceeded' ||
-      settlement?.transferStatus === 'RefundPending'
 
     return ok({
       order: {
-        ...order,
+        ...forBrowser(order),
         status: settled ? 'settled' : settlement?.transferStatus === 'Failed' ? 'failed' : order.status,
         settledAt: settled ? settlement?.receivedAt : order.settledAt,
         txHash: settlement?.txHash ?? order.txHash,
-        refundStatus: refunded ? settlement?.transferStatus : undefined,
+        refundStatus: refund?.transferStatus,
         webhook: settlement
           ? {
               eventId: settlement.eventId,
@@ -92,8 +106,15 @@ export async function PATCH(req: Request, ctx: Ctx) {
       )
     }
 
-    // A webhook may have arrived first. Settlement outranks anything the browser reports.
-    if (order.status === 'settled') return ok({ order })
+    /**
+     * A webhook may have arrived first. Settlement outranks anything the browser reports.
+     *
+     * This used to test `order.status === 'settled'`, which could never be true: `settled` is
+     * derived on read from the settlement key and is never written into the order record. So the
+     * guard read as protection and was doing nothing. Ask the key that actually holds the fact.
+     */
+    const settlement = await getSettlement(id)
+    if (settlement?.transferStatus === 'Succeeded') return ok({ order: forBrowser(order) })
 
     const update = parsed.data
     await putOrder({
@@ -108,6 +129,7 @@ export async function PATCH(req: Request, ctx: Ctx) {
       failure: update.failure ?? order.failure
     })
 
-    return ok({ order: await getOrder(id) })
+    const saved = await getOrder(id)
+    return ok({ order: saved ? forBrowser(saved) : null })
   })
 }

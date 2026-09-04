@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect } from 'react'
+import { useModal } from './useModal'
 
 /**
  * Card and Apple Pay open, and then say what they are.
@@ -23,12 +23,9 @@ export function PretendPaymentModal({
   onClose: () => void
   onUseCrypto: () => void
 }) {
-  useEffect(() => {
-    if (!method) return
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [method, onClose])
+  // Escape, plus the three parts that were missing: focus in, trapped while open, and handed
+  // back to whatever opened it. `aria-modal` was already promising that confinement.
+  const dialog = useModal<HTMLDivElement>(Boolean(method), onClose)
 
   if (!method) return null
 
@@ -39,6 +36,8 @@ export function PretendPaymentModal({
       <div className="absolute inset-0 bg-ink/40" onClick={onClose} aria-hidden />
 
       <div
+        ref={dialog}
+        tabIndex={-1}
         role="dialog"
         aria-modal="true"
         aria-label={isApple ? 'Apple Pay' : 'Card payment'}

@@ -1,4 +1,5 @@
 import 'server-only'
+import { isRefundStatus, settlementStanding } from '@/lib/mesh/webhook'
 import { store } from './index'
 
 /**
@@ -162,12 +163,48 @@ export type SettlementRecord = {
   receivedAt: number
   txHash?: string
   transferId?: string
+  /**
+   * What the delivery claimed, checked against what was ordered. Absent on records written before
+   * the check existed, which is why every reader treats it as optional rather than assuming.
+   */
+  verification?: {
+    checked: string[]
+    mismatches: string[]
+  }
 }
 
+const settlementKey = (orderId: string) => `settlement:${orderId}`
+const refundKey = (orderId: string) => `refund:${orderId}`
+
 export async function putSettlement(orderId: string, record: SettlementRecord): Promise<void> {
-  await store().set(`settlement:${orderId}`, record, ORDER_TTL)
+  const refund = isRefundStatus(record.transferStatus)
+  const key = refund ? refundKey(orderId) : settlementKey(orderId)
+
+  const held = await store().get<SettlementRecord>(key)
+  if (held) {
+    // Refunds have no ordering of their own worth defending, so the latest one stands.
+    if (!refund) {
+      if (settlementStanding(record.transferStatus) < settlementStanding(held.transferStatus)) return
+      if (settlementStanding(record.transferStatus) === settlementStanding(held.transferStatus)) {
+        // Same standing, so the first delivery keeps the timestamp it settled at. A later one only
+        // fills in what the first was missing, which is usually the transaction hash.
+        await store().set(
+          key,
+          { ...held, txHash: held.txHash ?? record.txHash, transferId: held.transferId ?? record.transferId },
+          ORDER_TTL
+        )
+        return
+      }
+    }
+  }
+
+  await store().set(key, record, ORDER_TTL)
 }
 
 export async function getSettlement(orderId: string): Promise<SettlementRecord | null> {
-  return store().get<SettlementRecord>(`settlement:${orderId}`)
+  return store().get<SettlementRecord>(settlementKey(orderId))
+}
+
+export async function getRefund(orderId: string): Promise<SettlementRecord | null> {
+  return store().get<SettlementRecord>(refundKey(orderId))
 }

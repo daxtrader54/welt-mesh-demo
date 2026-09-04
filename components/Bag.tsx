@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import { usd } from '@/lib/format'
 import { HANDLING_FEE, PRODUCT, plateSrc, type Colourway } from '@/lib/product'
+import { useModal } from './useModal'
 
 /**
  * The bag, and the panel that confirms an add.
@@ -27,12 +28,19 @@ export function AddedToBag({
   onViewBag: () => void
   onKeepShopping: () => void
 }) {
+  // This had `role="dialog"` and nothing else: no Escape, and its own "View bag" button sat about
+  // twenty-five tab stops away from wherever focus happened to be.
+  const dialog = useModal<HTMLDivElement>(true, onKeepShopping)
+
   return (
     <div className="fixed inset-0 z-50 grid place-items-end sm:place-items-start sm:justify-end sm:p-6">
       <div className="absolute inset-0 bg-ink/30" onClick={onKeepShopping} aria-hidden />
 
       <div
+        ref={dialog}
+        tabIndex={-1}
         role="dialog"
+        aria-modal="true"
         aria-label="Added to bag"
         style={{ marginBottom: 'env(safe-area-inset-bottom)' }}
         className="stamp relative w-full border border-rule bg-plate p-5 sm:mb-0 sm:w-[24rem]"
@@ -168,7 +176,7 @@ export function BagView({
         </div>
         <div className="mt-1 flex items-baseline justify-between gap-4">
           <span className="label">Savings off RRP</span>
-          <span className="data text-sm" style={{ color: 'var(--plate-accent)' }}>
+          <span className="data text-sm" style={{ color: 'var(--color-positive)' }}>
             {usd(savings)}
           </span>
         </div>
@@ -181,8 +189,11 @@ export function BagView({
           {HANDLING_FEE > 0
             ? `Delivery is free. The ${usd(HANDLING_FEE)} handling fee is ours and sits on top, so the merchant still receives ${usd(PRODUCT.price)}.`
             : `Delivery is free, and ${usd(PRODUCT.price)} is what reaches the merchant.`}{' '}
-          Your exchange may charge a small withdrawal fee on top. Mesh quotes it exactly before you
-          confirm, and it is never more than a cent or two on a payment this size.
+          {/* No figure named. The cent-or-two the sandbox returns is a sandbox artefact, and real
+              Coinbase ERC-20 withdrawals on Ethereum run to dollars. The checkout already refuses
+              to guess this number; the bag should not undercut it. */}
+          Your exchange may charge a withdrawal fee on top. Mesh quotes it exactly before you
+          confirm.
         </p>
       </aside>
     </div>

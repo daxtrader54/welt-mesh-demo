@@ -18,6 +18,7 @@ export type FailureCode =
   | 'no_eligible_assets'
   | 'preview_failed'
   | 'execution_failed'
+  | 'transfer_pending'
   | 'transfer_declined'
   | 'session_expired'
   | 'abandoned'
@@ -100,6 +101,19 @@ const COPY: Record<FailureCode, { title: string; hint?: string; retryable: boole
     title: 'The payment did not go through',
     hint: 'Nothing has been taken. You can try again.',
     retryable: true
+  },
+  /**
+   * Authorised, not finished, and emphatically not retryable.
+   *
+   * A pending transfer used to be reported as `execution_failed`, which is retryable, so a
+   * "Try again" button appeared directly under the words "Nothing else is needed from you" and
+   * the retry it offered was a second $50 payment. Mesh's own delivery log shows settlement
+   * taking up to 34 seconds, so this is a state a demo will actually reach.
+   */
+  transfer_pending: {
+    title: 'Your payment is still being confirmed',
+    hint: 'Your account has authorised it and the exchange has not finished. Nothing else is needed from you.',
+    retryable: false
   },
   transfer_declined: {
     title: 'The payment was declined',

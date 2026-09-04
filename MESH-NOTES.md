@@ -315,8 +315,15 @@ identical from the outside, and only one of them is your fault:
 
 Measured across the first 25 transfers on this client: **14 delivered, 2 refused, 9 never
 attempted.** The two refusals are real 401s from before the webhook secret was configured, which is
-the endpoint working correctly. The nine are Mesh. Without this endpoint all eleven look like the
-same bug, and the nine look like yours.
+the endpoint working correctly.
+
+**The nine were ours.** This note first recorded them as Mesh being intermittent, which the log
+itself disproves: the nine are one contiguous block of the oldest transfers, and every transfer
+from a fixed timestamp onward carries a delivery attempt. That timestamp is when the callback URI
+was registered. An unregistered endpoint looks exactly like a flaky sender until you sort by time.
+
+The endpoint is still worth wiring in for the reason above: without it, all eleven look like the
+same bug. The correction is the more useful lesson.
 
 Worth wiring into any integration before you spend an afternoon debugging an endpoint that was
 never called. `responseMessage` is not worth storing: it echoes your own response body and every

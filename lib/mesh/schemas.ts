@@ -236,23 +236,28 @@ export type QuoteResponse = z.infer<typeof quoteResponse>
 /**
  * The webhook body. Mesh sends PascalCase here, unlike every other endpoint.
  * `EventId` is stable across retries and is the idempotency key. `Id` changes per delivery.
+ *
+ * `.nullish()` throughout, like everything else in this file, and for a sharper reason here. These
+ * fifteen were `.optional()`, so a delivery carrying `"TxHash": null` failed the parse, returned
+ * 400, and lost the settlement for good: the same body with the key absent was accepted. Mesh does
+ * not retry a delivery it has already had a response to, so that order never settles.
  */
 export const webhookPayload = z.object({
-  EventId: z.string().optional(),
-  Id: z.string().optional(),
-  SentTimestamp: z.number().optional(),
-  TransferId: z.string().optional(),
-  TransferStatus: z.string().optional(),
-  TransactionId: z.string().optional(),
-  TxHash: z.string().optional(),
-  UserId: z.string().optional(),
-  SourceAmount: z.number().optional(),
-  DestinationAmount: z.number().optional(),
-  Chain: z.string().optional(),
-  Token: z.string().optional(),
-  SourceAddress: z.string().optional(),
-  DestinationAddress: z.string().optional(),
-  SourceAccountProvider: z.string().optional()
+  EventId: z.string().nullish(),
+  Id: z.string().nullish(),
+  SentTimestamp: z.number().nullish(),
+  TransferId: z.string().nullish(),
+  TransferStatus: z.string().nullish(),
+  TransactionId: z.string().nullish(),
+  TxHash: z.string().nullish(),
+  UserId: z.string().nullish(),
+  SourceAmount: z.number().nullish(),
+  DestinationAmount: z.number().nullish(),
+  Chain: z.string().nullish(),
+  Token: z.string().nullish(),
+  SourceAddress: z.string().nullish(),
+  DestinationAddress: z.string().nullish(),
+  SourceAccountProvider: z.string().nullish()
 })
 
 export type WebhookPayload = z.infer<typeof webhookPayload>

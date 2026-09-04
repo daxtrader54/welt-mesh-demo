@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { clockTime, token, usd } from '@/lib/format'
+import { clockTime, orderNumber, token, usd } from '@/lib/format'
 
 /**
  * Payment history, read from Mesh rather than from us.
@@ -43,7 +43,7 @@ function deliveryOf(t: Transfer) {
 }
 
 const tone = (t: 'good' | 'warn') =>
-  t === 'good' ? 'var(--plate-accent)' : 'var(--color-warn)'
+  t === 'good' ? 'var(--color-positive)' : 'var(--color-warn)'
 
 export function History({ onBack }: { onBack: () => void }) {
   const [data, setData] = useState<{ items: Transfer[]; total: number } | null>(null)
@@ -160,7 +160,10 @@ export function History({ onBack }: { onBack: () => void }) {
                         ['Fees', t.feesInFiat != null ? usd(t.feesInFiat) : '—'],
                         ['Network', t.network ?? '—'],
                         ['Funded by', t.funding.map(f => `${f.from ?? '?'} → ${f.to ?? '?'}`).join(', ') || '—'],
-                        ['Order reference', t.reference ?? '—'],
+                        // Through `orderNumber` so this matches the WELT-XXXXXX on the receipt.
+                        // It was printing the raw UUID, so the merchant's reconciliation screen
+                        // could not be matched against the reference the customer reads out.
+                        ['Order reference', t.reference ? orderNumber(t.reference) : '—'],
                         ['Mesh transfer id', t.id ?? '—'],
                         ['Reference hash', t.hash ?? '—']
                       ].map(([k, v]) => (

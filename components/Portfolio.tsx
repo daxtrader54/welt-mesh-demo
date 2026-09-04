@@ -257,7 +257,7 @@ export function Portfolio({
                    * like an account where nothing happens to be convertible.
                    */}
                   {canPay ? (
-                    <span className="note shrink-0" style={{ color: 'var(--plate-accent)' }}>
+                    <span className="note shrink-0" style={{ color: 'var(--color-positive)' }}>
                       {f!.eligible ? 'can pay' : 'can pay, converted'}
                     </span>
                   ) : f ? (
@@ -298,7 +298,17 @@ export function Portfolio({
             pay for the order.{' '}
             {funding?.some(f => f.eligibleWithFunding)
               ? `Mesh has said it can fund this order by converting what you hold, and it does that at the payment step.`
-              : `You hold enough ${PRODUCT.settlement.symbol} already, so Mesh has no reason to convert anything. On an account without it, Mesh funds the payment by converting one of these instead, and the receipt names which.`}{' '}
+              : /**
+                 * Says what is known, and stops at the edge of it.
+                 *
+                 * This used to promise that on an account without USDC, Mesh funds the payment by
+                 * converting another holding and the receipt names which. No transfer on this
+                 * client has ever had a converting funding leg, and asked directly about BTC
+                 * against a USDC destination, `configure` did not return it as eligible with
+                 * funding. The branch above is the honest version of that claim: it only appears
+                 * when Mesh has actually said so for this account.
+                 */
+                `You hold enough ${PRODUCT.settlement.symbol} already, so Mesh has no reason to convert anything. Whether it would convert another holding on an account without it is Mesh's call at the payment step, and this build has not seen it do so yet.`}{' '}
             All {positions.length} balances came from one connection.
           </p>
         </details>

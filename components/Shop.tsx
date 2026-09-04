@@ -60,6 +60,18 @@ import { LINK_FRAME_ID, preloadMeshLink, useMeshLink } from './useMeshLink'
 
 type Step = 'shop' | 'product' | 'bag' | 'delivery' | 'checkout' | 'done' | 'history'
 
+/**
+ * How many times to ask whether the webhook has landed. First at 2 seconds, then every 3.
+ *
+ * This was 12, which gave up at 38 seconds. Mesh's own delivery log for this account says
+ * settlement has taken anything from 6 to 34 seconds, so roughly one run in fifteen was told
+ * "no webhook received" for a payment that had settled perfectly well. 25 puts the cap past
+ * 70 seconds, which is comfortably clear of the slowest delivery on record. The poll is one
+ * GET every 3 seconds and the receipt is already complete without it, so waiting longer costs
+ * nothing and being wrong on stage costs a lot.
+ */
+const SETTLEMENT_POLLS = 25
+
 export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const [step, setStep] = useState<Step>('shop')
   const [colourwayId, setColourwayId] = useState<ColourwayId>(DEFAULT_COLOURWAY)
@@ -88,8 +100,13 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   // ?demo=1 opens it docked for presenting.
   const [panelOpen, setPanelOpen] = useState(panelOpenByDefault)
   const [drawer, setDrawer] = useState(false)
-  /** True while Mesh Link is on screen, so the checkout makes room for it. */
+  /**
+   * `linkOpen` is "a Link session is up", either mode. `linkEmbedded` is "it is in our column".
+   * They were one flag carrying the embedded value, which meant a phone, where Link is always an
+   * overlay, believed nothing was open.
+   */
   const [linkOpen, setLinkOpen] = useState(false)
+  const [linkEmbedded, setLinkEmbedded] = useState(false)
   /**
    * An account is connected. Deliberately separate from `funding`: a failed balance read is not
    * fatal, and gating the pay button on the portfolio meant a shopper who connected successfully
@@ -132,6 +149,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   }>({ status: null, error: null, assets: null })
   /** Which asset the shopper picked. Decides the single destination sent to Mesh. */
   const [asset, setAsset] = useState<string | null>(null)
+  /** The single `main`. Focus lands here on a step change, so the keyboard follows the journey. */
+  const mainRef = useRef<HTMLElement>(null)
 
   const colourway = findColourway(colourwayId)
   /** True when what is on screen is exactly what is already in the bag. */
@@ -358,16 +377,12 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
        */
       const status = String(payload.status ?? '').toLowerCase()
       if (status && status !== 'success' && status !== 'succeeded') {
+        // `transfer_pending` carries its own copy and is not retryable. It used to be
+        // `execution_failed`, which is, so the recovery offered under "Nothing else is needed
+        // from you" was a second $50 payment.
         fail(
-          failure(status === 'pending' ? 'execution_failed' : 'transfer_declined', {
-            title:
-              status === 'pending'
-                ? 'Your payment is still being confirmed'
-                : 'The payment did not complete',
-            hint:
-              status === 'pending'
-                ? 'Your account has authorised it and the exchange has not finished. Nothing else is needed from you.'
-                : undefined,
+          failure(status === 'pending' ? 'transfer_pending' : 'transfer_declined', {
+            title: status === 'pending' ? undefined : 'The payment did not complete',
             detail: `Mesh reported transfer status "${payload.status}"`
           })
         )
@@ -429,7 +444,16 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
        * preview failed - was overwritten by a generic "Payment cancelled" on the way out.
        */
       if (order.status === 'failed') return
-      if (!error && (order.status === 'connected' || order.status === 'draft')) return
+      // `connecting` belongs here too. Closing Mesh's sign-in before connecting anything was
+      // reported as "Payment cancelled while signing in", and no payment had been started.
+      if (
+        !error &&
+        (order.status === 'connecting' ||
+          order.status === 'connected' ||
+          order.status === 'draft')
+      ) {
+        return
+      }
 
       const where = describeExitPage(page)
       fail(
@@ -447,7 +471,10 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       // A ref, not state: the events that need it can arrive in the same tick as the open.
       reusedTokensRef.current = info.reusedTokens
     },
-    onVisibilityChange: setLinkOpen
+    onVisibilityChange: v => {
+      setLinkOpen(v.open)
+      setLinkEmbedded(v.embedded)
+    }
   })
 
   const addToBag = useCallback(() => {
@@ -530,7 +557,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
     const tick = async () => {
       if (cancelled) return
-      if (attempts >= 12) {
+      if (attempts >= SETTLEMENT_POLLS) {
         const reason = await explain()
         if (!cancelled) dispatch({ type: 'settlement:timeout', at: Date.now(), reason })
         return
@@ -561,8 +588,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           })
           return
         }
-        // Only the last unsuccessful poll is logged, so twelve identical lines do not bury the run.
-        if (attempts >= 12) {
+        // Only the last unsuccessful poll is logged, so the whole run does not bury the trace.
+        if (attempts >= SETTLEMENT_POLLS) {
           note(
             `GET /api/orders/:id (${attempts} polls)`,
             'no webhook received',
@@ -591,16 +618,24 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     setPurchased(null)
     setPickedIntegrationId(null)
     setFunding(null)
-    setConnection(null)
     setOrderId(null)
     setOrderRef(null)
     setCalls([])
     setSize(null)
     setDrawer(false)
     setLinkOpen(false)
-    // The account stays connected on purpose, which is what makes a second run fast. Only the
-    // order and what was read for it are cleared, including the choice of how to pay, so the
-    // next checkout offers card and Apple Pay again rather than assuming crypto.
+    setLinkEmbedded(false)
+    /**
+     * The account stays connected on purpose, which is what makes a second run fast. Only the
+     * order and what was read for it are cleared, including the choice of how to pay, so the
+     * next checkout offers card and Apple Pay again rather than assuming crypto.
+     *
+     * `connection` is deliberately not cleared here, and used to be. The server keeps the
+     * connection through a reset by design, and `hasConnection` stays true, but nulling the
+     * summary meant `startConnect` failed its `if (connection)` shortcut and opened a full
+     * Coinbase sign-in on the second run, under a screen still promising there would not be one.
+     * The only refetch is a mount effect, which does not run again after a reset.
+     */
     setChoseCrypto(false)
     setFunding(null)
     setPositions([])
@@ -610,12 +645,27 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     window.scrollTo({ top: 0 })
   }, [])
 
+  /**
+   * True once the shopper has moved at all, so the first paint does not steal focus.
+   *
+   * Focusing `main` on mount would drag a screen reader past the header before it has read
+   * anything. Focusing it on every step after that is the point.
+   */
+  const moved = useRef(false)
+
+  useEffect(() => {
+    if (!moved.current) return
+    mainRef.current?.focus({ preventScroll: true })
+  }, [step])
+
   const goto = useCallback((next: Step) => {
+    moved.current = true
     setStep(next)
     setJustAdded(false)
     // Navigating away unmounts the Link iframe, and nothing else clears this. Left set, every
     // content block on the checkout stays hidden and the column is blank until a page reload.
     setLinkOpen(false)
+    setLinkEmbedded(false)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
 
@@ -689,6 +739,93 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   }, [])
 
   /**
+   * The order id survives a refresh, so the receipt can come back.
+   *
+   * Everything about a completed order lived in React state and nowhere else, so reloading the
+   * page after authorising left the shopper with $50 gone, no reference, no confirmation and the
+   * shoes still sitting in their bag. The id is the only thing worth keeping: the server holds
+   * the rest, and `/api/orders/:id` already returns all of it.
+   *
+   * The colourway and size ride along because the receipt shows what was bought, and that is the
+   * one part of the picture the order record cannot rebuild into a product object.
+   */
+  useEffect(() => {
+    try {
+      const item = bag ?? purchased
+      if (orderId && item) {
+        sessionStorage.setItem(
+          'welt_order',
+          JSON.stringify({
+            id: orderId,
+            ref: orderRef,
+            colourwayId: item.colourway.id,
+            size: item.size
+          })
+        )
+      } else if (!orderId) {
+        sessionStorage.removeItem('welt_order')
+      }
+    } catch {
+      // Private browsing can refuse. The receipt still works for this page view.
+    }
+  }, [orderId, orderRef, bag, purchased])
+
+  useEffect(() => {
+    let cancelled = false
+    let saved: { id: string; ref: string | null; colourwayId: ColourwayId; size: string } | null =
+      null
+    try {
+      const raw = sessionStorage.getItem('welt_order')
+      if (raw) saved = JSON.parse(raw)
+    } catch {
+      return
+    }
+    const stored = saved
+    if (!stored?.id) return
+
+    fetch(`/api/orders/${stored.id}`)
+      .then(r => r.json())
+      .then(j => {
+        if (cancelled || !j.ok || !j.order) return
+        const o = j.order
+        /**
+         * Only a finished order is worth restoring. One still sitting at `created` never got paid,
+         * and putting that shopper on a confirmation screen would be a lie: they belong in the bag,
+         * which is where the bag restore has already left them.
+         */
+        if (o.status !== 'paid' && o.status !== 'settled' && o.status !== 'failed') return
+        setOrderId(o.id)
+        setOrderRef(o.reference ?? stored.ref ?? null)
+        setPurchased({ colourway: findColourway(stored.colourwayId), size: stored.size })
+        dispatch({
+          type: 'restored',
+          at: Date.now(),
+          status: o.status,
+          paidAt: o.paidAt ?? null,
+          source: o.source ? { name: o.source, type: '' } : null,
+          payment: {
+            symbol: o.symbol ?? null,
+            amountInFiat: o.amount ?? null,
+            totalAmountInFiat: o.totalAmountInFiat ?? null,
+            toAddress: o.destination ?? null,
+            txId: o.txId ?? null,
+            transferId: o.transferId ?? null,
+            txHash: o.txHash ?? null
+          },
+          webhook: o.webhook ?? null
+        })
+        setStep('done')
+      })
+      .catch(() => {
+        // The order is gone or the store is unreachable. The shop opens normally, which is the
+        // right fallback: better a clean shop than a confirmation we cannot stand behind.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  /**
    * A dead connection, reported from either path, is forgotten here.
    *
    * Keyed on the code rather than the failure object so it fires on the transition and not on
@@ -748,6 +885,48 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
   return (
     <div className="flex" style={{ ['--plate-accent' as string]: colourway.accent }}>
+      {/**
+       * The same credentials line the embedded frame carries, for when Link opens as an overlay.
+       *
+       * On a phone Link always takes the whole screen, and the line lives inside the embedded
+       * container, so it never rendered: no visible password at the moment Mesh asks for one, and
+       * no "never real credentials" warning at the moment someone might type theirs. Mesh's popup
+       * sits at z-index 10000 and covers the page, so this has to go above it rather than behind.
+       */}
+      {/**
+       * What just happened, for anyone not looking at the screen.
+       *
+       * The app had two `role="alert"` regions and both were failures, so a screen reader user
+       * heard every way this can go wrong and nothing at all when it went right. `polite` because
+       * none of these interrupt anything: they are the outcome of something the shopper started.
+       */}
+      <p className="sr-only" role="status" aria-live="polite">
+        {order.status === 'settled'
+          ? `Order ${orderRef ?? ''} confirmed and settled. Mesh has confirmed the merchant was paid.`
+          : order.status === 'paid'
+            ? `Order ${orderRef ?? ''} confirmed. Waiting for Mesh to confirm settlement.`
+            : order.status === 'paying'
+              ? 'Payment in progress.'
+              : order.status === 'connecting'
+                ? 'Connecting your account.'
+                : order.status === 'connected'
+                  ? 'Account connected. Reading your balances.'
+                  : ''}
+      </p>
+
+      {linkOpen && !linkEmbedded && (
+        <div
+          className="fixed inset-x-0 top-0 border-b border-ink bg-plate px-4 py-2 text-center"
+          style={{ zIndex: 10001, paddingTop: 'calc(0.5rem + env(safe-area-inset-top))' }}
+        >
+          <span className="note">
+            Mesh sandbox, never real credentials ·{' '}
+            <span className="data text-ink">Mesh</span> ·{' '}
+            <span className="data text-ink">Pass123</span> ·{' '}
+            <span className="data text-ink">123456</span>
+          </span>
+        </div>
+      )}
       <div className="min-w-0 flex-1">
         {/* The bottom padding clears the fixed console bar, plus whatever iOS puts below it. */}
         <div
@@ -798,6 +977,16 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
             </div>
           </header>
 
+          {/**
+           * One landmark, on every step, and the thing focus moves to when the step changes.
+           *
+           * `main` only existed inside the product and checkout branches, so the shop, bag,
+           * delivery and history steps had no landmark at all. And `goto` scrolled without ever
+           * touching focus: each step is a mutually exclusive branch, so the control that was
+           * clicked unmounts and focus falls to `<body>`, eight times across the journey.
+           */}
+          <main id="welt-main" ref={mainRef} tabIndex={-1} className="outline-none">
+
           {step === 'history' && <History onBack={() => goto('shop')} />}
 
           {step === 'shop' && (
@@ -818,7 +1007,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
               {/* Explicit grid placement, because mobile stacks in DOM order. The first pass put
                   the entire spec sheet between the photograph and the price. */}
-              <main className="grid items-start gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
+              <div className="grid items-start gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
                 <section className="md:col-start-1 md:row-start-1 lg:col-start-1 lg:row-start-1">
                   <ProductPlate colourway={colourwayId} plate={plate} onPlateChange={setPlate} />
                 </section>
@@ -912,7 +1101,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                     ))}
                   </dl>
                 </section>
-              </main>
+              </div>
             </>
           )}
 
@@ -966,7 +1155,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
            * meet after paying. The YOURS stamp moved onto the receipt thumbnail.
            */}
           {(step === 'checkout' || step === 'done') && item && (
-            <main className="mx-auto w-full max-w-[38rem] py-8">
+            <div className="mx-auto w-full max-w-[38rem] py-8">
               <section className="flex flex-col gap-7">
                 {step === 'checkout' && !paid && (
                   <>
@@ -1048,11 +1237,19 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                     {order.failure && !linkOpen && (
                       <FailureNotice
                         failure={order.failure}
+                        /**
+                         * `force` drops the stored account and opens Mesh's full catalogue, which
+                         * is right when the stored connection is what failed and wrong for
+                         * everything else. Every retryable pre-connection failure used to force
+                         * it, so a network blip put the shopper in front of thirteen providers
+                         * including MetaMask, Phantom and Rainbow, which this app's own copy says
+                         * cannot pay here.
+                         */
                         onRetry={
                           order.failure.retryable
                             ? funding
                               ? () => startPayment()
-                              : () => startConnect(true)
+                              : () => startConnect(order.failure?.code === 'connection_expired')
                             : undefined
                         }
                         onDismiss={() => {
@@ -1093,8 +1290,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                                 : connection
                                   ? `Continue with ${connection.brokerName}`
                                   : suggested
-                                    ? `Pay with ${suggested.name} · ${usd(PRODUCT.price + HANDLING_FEE)}`
-                                    : `Pay with crypto · ${usd(PRODUCT.price + HANDLING_FEE)}`}
+                                    ? `Continue with ${suggested.name}`
+                                    : 'Continue with crypto'}
                             </button>
                             <p className="note mt-2">
                               {connection
@@ -1183,11 +1380,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                     )}
                     <div
                       className={
-                        linkOpen ? 'stamp border border-rule bg-plate' : 'h-0 overflow-hidden'
+                        linkEmbedded ? 'stamp border border-rule bg-plate' : 'h-0 overflow-hidden'
                       }
-                      aria-hidden={!linkOpen}
+                      aria-hidden={!linkEmbedded}
                     >
-                      {linkOpen && (
+                      {linkEmbedded && (
                         <>
                           {/* One line, on the bar Mesh's own frame sits under. The credentials
                               have to be readable at the exact moment Mesh asks for them, which is
@@ -1214,8 +1411,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                         // Mesh asks for 665px: its sticky footer and action buttons position
                         // against the iframe's own viewport height, not the page's.
                         style={{
-                          height: linkOpen ? 'min(665px, calc(100dvh - 180px))' : 0,
-                          minHeight: linkOpen ? 450 : 0,
+                          height: linkEmbedded ? 'min(665px, calc(100dvh - 180px))' : 0,
+                          minHeight: linkEmbedded ? 450 : 0,
                           display: 'block'
                         }}
                         allow="clipboard-write; camera"
@@ -1272,10 +1469,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                   </>
                 )}
               </section>
-            </main>
+            </div>
           )}
 
-          {showManifest && <Manifest order={order} />}
+            {showManifest && <Manifest order={order} />}
+          </main>
 
           <Footer />
         </div>

@@ -5,7 +5,7 @@ A single-product shoe shop where the checkout runs on [Mesh](https://www.meshpay
 **Live: https://welt-mesh-demo.vercel.app**
 
 You pick a size, add to bag, check out, connect an exchange account, see what you actually hold,
-choose which stablecoin to pay with, and pay. Underneath there is a second layer showing what really
+choose which stablecoin the merchant is paid in, and pay. Underneath there is a second layer showing what really
 happened: every Mesh event with its payload, the routes that produced them, and the reasoning behind
 the whole thing.
 
@@ -246,8 +246,14 @@ about *this account*. The quote endpoint takes no auth token, so whatever it say
 the broker and its minimums, and reading it as a verdict on the shopper's holdings is a mistake this
 build made for a while. `configure` takes `fromAuthToken` and returns one entry per holding with
 `eligibleForTransfer`, `eligibleForTransferWithFunding` and an `ineligibilityReason`. The second of
-those is the interesting one: it is Mesh saying it could pay with that asset by converting it, which
-is what lets the portfolio tell someone holding $397,000 of BTC that their BTC can buy the shoes.
+those is the interesting one: it is Mesh saying it could pay with that asset by converting it.
+
+That is the mechanism. Whether it fires for this client is a separate question, and the honest
+answer is that it has not yet. Across every transfer on this account, all funding legs are
+same-asset: Mesh has never been observed converting one holding to settle in another. Asked
+directly about BTC against a $50 USDC-on-Ethereum destination, `configure` did not return it as
+eligible with funding. So the portfolio shows what Mesh actually says per holding rather than a
+promise about conversion, and `MESH-NOTES.md` records the measurement.
 
 **Three endpoints, three different names for the same connection.** `holdings/get` requires
 `sandboxCoinbase` and rejects `coinbase`. `transfers/managed/quote` does the exact reverse. Only
@@ -329,9 +335,14 @@ separates three things that look identical from a merchant's side:
 | Present, `responseCode` not OK | It arrived and you refused it. Signature, or a missing secret |
 | Present, `responseCode: OK` | Delivered and accepted |
 
-Measured on this client: 14 delivered, 2 refused, 9 never attempted. The two refusals are genuine
-401s from before the webhook secret was set, which is the endpoint working. The nine are Mesh. Worth
-wiring in before spending an afternoon debugging an endpoint that was never called.
+Measured on this client, currently 16 delivered, 2 refused, 7 never attempted. The two refusals are
+genuine 401s from before the webhook secret was set, which is the endpoint working.
+
+The unattempted ones are ours, not Mesh's, and reading the log properly is what shows it: they are a
+single contiguous block of the oldest transfers, and every transfer after a fixed point has a
+delivery attempt. That point is when the webhook callback URI was registered. Not intermittency, an
+unregistered endpoint. Worth wiring this in before spending an afternoon debugging an endpoint that
+was never called, and worth reading the timestamps before blaming the sender.
 
 ---
 
@@ -443,10 +454,14 @@ is the better experience and the one Mesh's polish guide is written for. It does
 the frame loads, fires `pageLoaded`, and renders white.
 
 **The phone gets less of it.** `viewport-fit=cover` plus `env(safe-area-inset-bottom)` on the
-console bar, both bottom sheets and the drawer, because on iOS Safari they sat under the browser's
-own toolbar and their buttons were hard to hit. The seven-row payment trace collapses to a count on
-a narrow screen: the right amount of detail beside a desktop checkout, a wall underneath a 390px
-one.
+console bar, both bottom sheets and the drawer, so they clear iOS Safari's own toolbar rather than
+sitting under it. The seven-row payment trace collapses to a count on a narrow screen: the right
+amount of detail beside a desktop checkout, a wall underneath a 390px one.
+
+Stated as intent, not as measurement. All of it was built and checked in a desktop browser at
+phone widths, and none of it has been run on a real handset. The thing most likely to be wrong is
+Mesh Link itself, which switches to an overlay below 1024px and is the one part of this journey
+this repo does not own.
 
 **No state management library.** One reducer over SDK events produces the order status, the manifest
 and the receipt, and it is the most tested thing here because it is where a regression would cost
@@ -621,9 +636,16 @@ Every sandbox account uses password `Pass123` and code `123456`.
 | `Mesh2` | Empty | A genuine `transferNoEligibleAssets` |
 | `Mesh3` | Cash only | Onramp-shaped accounts |
 | `Mesh4` | Large | Big balances |
+| `MeshBTC` | BTC, no stablecoin | Whether Mesh will convert to fund a USDC settlement |
 
 These are in the panel's Demo tab, because failure states should be shown for real rather than
 described. Nothing here is mocked and no failure is simulated.
+
+Two things worth knowing before you use them. The balances are shared with every other Mesh sandbox
+user, so an account that was funded yesterday may not be today, and each run through spends about
+$50. And `MeshBTC` is the account that answers the conversion question above: connect it and watch
+the panel's Integration tab to see what `configure` says about a BTC holding against a USDC
+destination.
 
 **The sandbox is not Coinbase.** The login form is served by Mesh, not the exchange, and typing real
 exchange credentials into it sends them somewhere they should not go. That is why the warning sits on

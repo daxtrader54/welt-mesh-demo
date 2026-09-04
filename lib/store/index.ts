@@ -24,6 +24,15 @@ export type Store = {
   del(key: string): Promise<void>
   /** Increments and sets a TTL on first write. Used to cap link token minting per session. */
   incr(key: string, ttlSeconds: number): Promise<number>
+  /**
+   * A real round trip, for /api/health.
+   *
+   * Constructing the Upstash client makes no network call, so "the environment variables are set"
+   * was being reported as "the store works". Health read green with the database paused, deleted
+   * or over quota, which is exactly the check you make before a demo and exactly the failure that
+   * takes both the pay path and settlement down.
+   */
+  ping(): Promise<boolean>
 }
 
 function redisStore(url: string, token: string): Store {
@@ -52,6 +61,12 @@ function redisStore(url: string, token: string): Store {
       const n = await redis.incr(key)
       if (n === 1) await redis.expire(key, ttlSeconds)
       return n
+    },
+    async ping() {
+      // A read of a key that does not exist is a real request and a real response. Cheaper than a
+      // write and it proves the same thing: the database is up and the token is accepted.
+      await redis.get('health:ping')
+      return true
     }
   }
 }
@@ -91,6 +106,9 @@ const memoryStore: Store = {
     const expiresAt = alive(key)?.expiresAt ?? Date.now() + ttlSeconds * 1000
     memory.set(key, { value: next, expiresAt })
     return next
+  },
+  async ping() {
+    return true
   }
 }
 

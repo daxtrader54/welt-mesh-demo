@@ -70,8 +70,15 @@ export type MeshLinkHandlers = {
     ms: number
     reusedTokens: boolean
   }) => void
-  /** Whether Link is on screen right now, so the page can make room for it. */
-  onVisibilityChange?: (visible: boolean) => void
+  /**
+   * Whether a Link session is up, and whether it is the embedded frame or Mesh's own overlay.
+   *
+   * These used to be one boolean carrying the embedded flag, so on a phone, where Link always
+   * opens as an overlay, the page believed no session was open at all. The sandbox credentials
+   * and the "never real credentials" warning are rendered off that, so they disappeared at
+   * exactly the moment Mesh puts a login in front of someone.
+   */
+  onVisibilityChange?: (state: { open: boolean; embedded: boolean }) => void
 }
 
 /**
@@ -162,11 +169,11 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
         const embed =
           typeof window !== 'undefined' &&
           window.matchMedia(`(min-width: ${EMBED_MIN_WIDTH}px)`).matches
-        latest.current.onVisibilityChange?.(embed)
+        latest.current.onVisibilityChange?.({ open: true, embedded: embed })
 
         clearWatchdog()
         watchdog.current = setTimeout(() => {
-          latest.current.onVisibilityChange?.(false)
+          latest.current.onVisibilityChange?.({ open: false, embedded: false })
           latest.current.onFailure(
             failure('sdk_load', {
               hint: `Mesh Link did not load. Check that ${window.location.origin} is registered in Mesh's Allowed Link URLs, and that *.meshconnect.com is reachable from this network.`,
@@ -197,28 +204,46 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
           },
           onIntegrationConnected: payload => latest.current.onConnected(payload),
           onTransferFinished: payload => {
-            latest.current.onVisibilityChange?.(false)
+            latest.current.onVisibilityChange?.({ open: false, embedded: false })
             latest.current.onTransferFinished(payload)
           },
           onExit: (error, summary) => {
+            /**
+             * Take the session and clear the slot before anything else. This is the base case.
+             *
+             * Mesh's guidance is to close the session in `onExit`, and without closing it the
+             * frame keeps a dead session loaded behind the collapsed container with its listener
+             * still attached. But `closeLink()` in SDK 3.12.0 ends by calling `options.onExit`,
+             * which is this function. Leaving `session.current` populated across that call meant
+             * it called itself: measured at 4,189 frames deep, ending in a `RangeError` that the
+             * catch below swallowed in silence. Worse than the wasted stack, every frame after the
+             * first re-entered with no arguments, so the real reason ("Payment cancelled at the
+             * payment summary") was overwritten 4,188 times by the generic one and
+             * `describeExitPage` never survived to reach the screen.
+             *
+             * Mesh's own `llms-full.txt` says `closeLink()` fires no `onExit` and tells you to
+             * call it from inside `onExit`. That is not true of 3.12.0, and this is the shape that
+             * works either way: a re-entrant call finds the slot empty and returns.
+             */
+            const live = session.current
+            session.current = null
+            if (!live) return
+
             clearWatchdog()
-            latest.current.onVisibilityChange?.(false)
+            latest.current.onVisibilityChange?.({ open: false, embedded: false })
             latest.current.onExit(error, summary)
-            // Mesh's guidance: close the session in onExit. Without it the frame keeps a dead
-            // session loaded behind the collapsed container and its listener stays attached.
             try {
-              session.current?.closeLink()
+              live.closeLink()
             } catch {
               // Already gone. Nothing to do.
             }
-            session.current = null
           }
         })
 
         session.current = link
         link.openLink(json.linkToken, embed ? LINK_FRAME_ID : undefined)
       } catch (err) {
-        latest.current.onVisibilityChange?.(false)
+        latest.current.onVisibilityChange?.({ open: false, embedded: false })
         latest.current.onFailure(
           failure('sdk_load', { detail: err instanceof Error ? err.message : String(err) })
         )
@@ -239,14 +264,20 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
    * page back in charge with the one action that works.
    */
   const close = useCallback(() => {
+    // Same take-first order as `onExit`, and for the same reason. Clearing the slot before calling
+    // `closeLink()` means the `onExit` it fires on the way out finds nothing and returns, so this
+    // does not also dispatch a "Payment cancelled" for a session the page closed on purpose.
+    const live = session.current
+    session.current = null
+    if (!live) return
+
     clearWatchdog()
-    latest.current.onVisibilityChange?.(false)
+    latest.current.onVisibilityChange?.({ open: false, embedded: false })
     try {
-      session.current?.closeLink()
+      live.closeLink()
     } catch {
       // Already gone.
     }
-    session.current = null
   }, [])
 
   return { open, busy, close }
