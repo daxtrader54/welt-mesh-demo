@@ -49,7 +49,6 @@ export async function GET() {
       configureTransfer(
         connection.authToken,
         connection.brokerType,
-        PRODUCT.price,
         ACCEPTED_ASSETS.map(a => ({
           networkId: env.merchantNetworkId,
           symbol: a.symbol,

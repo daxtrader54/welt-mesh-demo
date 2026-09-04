@@ -260,13 +260,11 @@ export function Portfolio({
                     <span className="note shrink-0">{why ?? 'not eligible for this order'}</span>
                   ) : funding ? (
                     /**
-                     * "Not asked" is not "refused", and showing nothing made them look identical.
-                     *
-                     * `configure` was sent the merchant's three accepted assets as `toAddresses`
-                     * and answered about exactly those three. The other eleven holdings were never
-                     * in the question, so Mesh has said nothing about them and neither should we.
+                     * Mesh assessed the account and did not return this symbol, which means it did
+                     * not consider it able to reach the merchant's address. Said plainly rather
+                     * than left blank, because a blank was being read as a refusal and this is one.
                      */
-                    <span className="note shrink-0 text-faint">not assessed</span>
+                    <span className="note shrink-0 text-faint">cannot reach this merchant</span>
                   ) : null}
                   <span className="data shrink-0 text-xs">{usd(p.marketValue)}</span>
                 </li>

@@ -494,9 +494,9 @@ export function TechnicalView({
               {funding.assets?.length ? (
                 <>
                   <p className="note mt-1">
-                    Asked about the merchant&apos;s accepted assets only, because those are the
-                    `toAddresses` the request carries. Everything else in the account is unassessed
-                    rather than refused.
+                    Every holding Mesh assessed for this order. A symbol missing from this list is
+                    one Mesh did not consider able to reach the merchant&apos;s address, which is
+                    the answer to whether it could pay.
                   </p>
                 <ul className="mt-2">
                   {funding.assets.map(a => (
