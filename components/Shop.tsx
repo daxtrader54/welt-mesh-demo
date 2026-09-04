@@ -71,6 +71,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    */
   const [pickedIntegrationId, setPickedIntegrationId] = useState<string | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
+  /** The short label on the receipt. The id itself is a UUID and never shown. */
+  const [orderRef, setOrderRef] = useState<string | null>(null)
   const [calls, setCalls] = useState<ServerCall[]>([])
   // Collapsed to start: the shop should get to be a shop before the demo announces itself.
   // ?demo=1 opens it docked for presenting.
@@ -277,6 +279,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     onOpening: info => {
       note('POST /api/mesh/link-token', 'POST /api/v1/linktoken', info.ms, true)
       if (info.orderId) setOrderId(info.orderId)
+      if (info.reference) setOrderRef(info.reference)
     },
     onVisibilityChange: setLinkOpen
   })
@@ -370,6 +373,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     setFunding(null)
     setConnection(null)
     setOrderId(null)
+    setOrderRef(null)
     setCalls([])
     setSize(null)
     setDrawer(false)
@@ -847,7 +851,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                         Yours.
                       </h1>
                       <p className="mt-3 text-sm leading-relaxed text-muted">
-                        Order <span className="data">{orderId}</span> is paid. We took{' '}
+                        Order <span className="data">{orderRef}</span> is paid. We took{' '}
                         {usd(order.payment.totalAmountInFiat ?? PRODUCT.price)} in{' '}
                         {order.payment.symbol} from your {order.source?.name ?? 'connected'} account
                         and sent it to the merchant on {order.payment.networkName}.
@@ -859,7 +863,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
                     <Receipt
                       order={order}
-                      orderId={orderId}
+                      orderId={orderRef}
                       size={`UK ${item.size}`}
                       colourway={item.colourway}
                       settled={settled}

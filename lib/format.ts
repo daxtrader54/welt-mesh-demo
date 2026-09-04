@@ -61,9 +61,19 @@ export function elapsed(at: number | null | undefined, from: number | null | und
   return `+${(ms / 1000).toFixed(1)}s`
 }
 
-/** WELT-0001 style. Short enough to read out on a call. */
-export function orderNumber(seed: string): string {
-  let hash = 0
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0
-  return `WELT-${String(hash % 10000).padStart(4, '0')}`
+/**
+ * The customer-facing order number, derived from the order's real id.
+ *
+ * These used to be the same string, and that string was a 32-bit hash reduced modulo 10,000. It
+ * was simultaneously the display number, the store key and the `transactionId` sent to Mesh, in a
+ * space small enough to collide at even odds after about 118 orders. A collision silently
+ * overwrote one order with another and then settled the wrong one, and because the id lived on
+ * Mesh's side of the boundary, changing it later would have meant changing what reconciliation
+ * joins on.
+ *
+ * Now the id is a UUID and this is a label derived from it: short enough to read out on a call,
+ * and carrying no meaning of its own.
+ */
+export function orderNumber(id: string): string {
+  return `WELT-${id.replace(/-/g, '').slice(0, 6).toUpperCase()}`
 }

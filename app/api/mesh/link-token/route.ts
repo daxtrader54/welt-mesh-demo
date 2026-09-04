@@ -6,6 +6,7 @@ import { createConnectToken, createPaymentToken } from '@/lib/mesh/client'
 import { ACCEPTED_ASSETS, COLOURWAYS, PRODUCT, SIZES, isAccepted } from '@/lib/product'
 import { ensureSessionId, meshUserId } from '@/lib/session'
 import { getSession, putOrder, underRateLimit, type OrderRecord } from '@/lib/store/records'
+import { randomUUID } from 'node:crypto'
 import { orderNumber } from '@/lib/format'
 
 export const runtime = 'nodejs'
@@ -119,8 +120,11 @@ export async function POST(req: Request) {
       symbol: a.symbol
     }))
 
+    const id = randomUUID()
     const order: OrderRecord = {
-      id: orderNumber(`${sid}:${Date.now()}`),
+      id,
+      reference: orderNumber(id),
+      sid,
       createdAt: Date.now(),
       status: 'created',
       colourway: colourway.name,
@@ -148,7 +152,12 @@ export async function POST(req: Request) {
     return ok({
       linkToken: res.data,
       ms: res.ms,
-      order: { id: order.id, amount: order.amount, symbol: order.symbol },
+      order: {
+        id: order.id,
+        reference: order.reference,
+        amount: order.amount,
+        symbol: order.symbol
+      },
       accessTokens
     })
   })

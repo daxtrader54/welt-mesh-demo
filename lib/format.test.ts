@@ -58,11 +58,24 @@ describe('maskToken', () => {
 })
 
 describe('orderNumber', () => {
-  it('is stable for the same session', () => {
-    expect(orderNumber('abc')).toBe(orderNumber('abc'))
+  const ID = '3f9a2c10-7b5e-4d21-9c8a-0e1f2a3b4c5d'
+
+  it('is derived from the order id, so the same order always reads the same', () => {
+    expect(orderNumber(ID)).toBe(orderNumber(ID))
   })
 
-  it('looks like an order number', () => {
-    expect(orderNumber('abc')).toMatch(/^WELT-\d{4}$/)
+  it('is short enough to read out on a call', () => {
+    expect(orderNumber(ID)).toBe('WELT-3F9A2C')
+    expect(orderNumber(ID)).toMatch(/^WELT-[0-9A-F]{6}$/)
+  })
+
+  /**
+   * The point of the change. Two different orders used to be able to produce the same string in a
+   * 10,000-value space, and that string was also the store key and Mesh's transactionId, so a
+   * collision settled the wrong order.
+   */
+  it('does not collide across a realistic number of orders', () => {
+    const ids = Array.from({ length: 5000 }, () => crypto.randomUUID())
+    expect(new Set(ids.map(orderNumber)).size).toBe(ids.length)
   })
 })

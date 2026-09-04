@@ -39,7 +39,7 @@ type TokenResponse =
       ok: true
       linkToken: string
       ms: number
-      order?: { id: string; amount: number; symbol: string }
+      order?: { id: string; reference: string; amount: number; symbol: string }
       accessTokens?: {
         accessToken: string
         brokerType: string
@@ -60,7 +60,7 @@ export type MeshLinkHandlers = {
   onExit: (error: string | undefined, summary: SessionSummary | undefined) => void
   onFailure: (error: Failure) => void
   /** Fired once the token is in hand, before Link opens. */
-  onOpening?: (info: { intent: OpenIntent; orderId?: string; ms: number }) => void
+  onOpening?: (info: { intent: OpenIntent; orderId?: string; reference?: string; ms: number }) => void
   /** Whether Link is on screen right now, so the page can make room for it. */
   onVisibilityChange?: (visible: boolean) => void
 }
@@ -127,7 +127,12 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
           return
         }
 
-        latest.current.onOpening?.({ intent, orderId: json.order?.id, ms: json.ms })
+        latest.current.onOpening?.({
+          intent,
+          orderId: json.order?.id,
+          reference: json.order?.reference,
+          ms: json.ms
+        })
 
         const { createLink } = await import('@meshconnect/web-link-sdk')
 

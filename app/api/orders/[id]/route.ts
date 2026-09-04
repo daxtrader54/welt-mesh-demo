@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import { failure } from '@/lib/failure'
 import { fail, guard, ok, readJson } from '@/lib/http'
+import { readSessionId } from '@/lib/session'
 import { getOrder, getSettlement, putOrder } from '@/lib/store/records'
 
 export const runtime = 'nodejs'
@@ -15,10 +16,19 @@ type Ctx = { params: Promise<{ id: string }> }
  * once the order settles or after a bounded number of attempts, because a sandbox that never
  * sends a webhook should not leave the browser asking forever.
  */
+/**
+ * 404 rather than 403 on a mismatch, so the endpoint does not confirm which ids exist. The webhook
+ * has no cookie and never comes through here; it writes settlement to its own key.
+ */
+async function owned(id: string) {
+  const [sid, order] = await Promise.all([readSessionId(), getOrder(id)])
+  return order && sid && order.sid === sid ? order : null
+}
+
 export async function GET(_req: Request, ctx: Ctx) {
   return guard(async () => {
     const { id } = await ctx.params
-    const [order, settlement] = await Promise.all([getOrder(id), getSettlement(id)])
+    const [order, settlement] = await Promise.all([owned(id), getSettlement(id)])
     if (!order) {
       return fail(
         failure('unknown', { title: 'We cannot find that order', detail: `No order ${id}` }),
@@ -74,8 +84,13 @@ export async function PATCH(req: Request, ctx: Ctx) {
     const parsed = patch.safeParse(await readJson(req))
     if (!parsed.success) return fail(failure('unknown', { detail: 'Malformed order update' }), 400)
 
-    const order = await getOrder(id)
-    if (!order) return fail(failure('unknown', { detail: `No order ${id}` }), 404)
+    const order = await owned(id)
+    if (!order) {
+      return fail(
+        failure('unknown', { title: 'We cannot find that order', detail: `No order ${id}` }),
+        404
+      )
+    }
 
     // A webhook may have arrived first. Settlement outranks anything the browser reports.
     if (order.status === 'settled') return ok({ order })
@@ -93,7 +108,6 @@ export async function PATCH(req: Request, ctx: Ctx) {
       failure: update.failure ?? order.failure
     })
 
-    const saved = await getOrder(id)
-    return ok({ order: saved })
+    return ok({ order: await getOrder(id) })
   })
 }
