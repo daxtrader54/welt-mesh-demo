@@ -38,14 +38,17 @@ WELT is a fictional clearance retailer listing one real product, a Skechers Spor
 four colourways at $50. It is not affiliated with Skechers or with MandM Direct, where the product
 images and the listing structure came from, and no orders are fulfilled.
 
-The journey:
+The journey is an ordinary shop funnel with Mesh at the end of it:
 
-1. Pick a colourway and a size.
-2. **Pay with crypto** opens a Mesh Link session that connects a Coinbase account and stops.
-3. The page reads the account's real holdings and shows what you hold against what this costs.
-4. **Pay $50** opens a second Link session carrying the payment. You can fund it from a different
-   account if you want to, and the receipt will say which one actually paid.
-5. The receipt prints. A verified webhook later upgrades it from paid to settled.
+1. **Product.** Pick a colourway and a size, add to bag.
+2. **Bag.** Line item, summary, savings off RRP, checkout securely.
+3. **Checkout.** Card, Apple Pay and a crypto account. The first two open real-looking sheets and
+   then say they are for show. The third opens a Mesh Link session that connects an account and
+   stops.
+4. The page reads that account's real holdings and shows what you hold against what this costs.
+5. **Pay.** A second Link session carries the payment, deep-linked to the account you already
+   connected so you are not asked to choose twice. **Change account** puts the picker back.
+6. The receipt prints and the bag empties. A verified webhook later upgrades paid to settled.
 
 Running alongside is a manifest: seven rows, each stamped by a real SDK event with the time it
 arrived. Nothing is on a timer. A row whose event never fires stays visibly blank.
@@ -109,8 +112,10 @@ way to read holdings before asking anyone to pay.
 }
 ```
 
-**Payment** carries the transaction, and is deliberately *not* deep-linked so the shopper keeps the
-choice of funding source.
+**Payment** carries the transaction, deep-linked to the account the shopper already connected,
+because being shown the same picker twice in one checkout is confusing. The integration id comes
+from the connect session's exit summary. Dropping it restores the picker, which is what the
+**Change account** link does.
 
 ```jsonc
 {
@@ -119,7 +124,8 @@ choice of funding source.
   "transferOptions": {
     "transactionId": "WELT-0042",        // comes back as clientTransactionId on every event
     "transferType": "payment",
-    "isInclusiveFeeEnabled": false,      // fee sits on top, merchant receives the full 50
+    "isInclusiveFeeEnabled": false,      // fees sit on top, destination receives the full 50
+    "clientFee": 0.04,                   // the merchant's own $2, as a ratio of the amount
     "toAddresses": [{
       "networkId": "e3c7fdd8-b1fc-4e51-85ae-bb276e075611",
       "symbol": "USDC",
@@ -216,9 +222,19 @@ you can see that rather than take it on trust.
 That is how the SDK works and you cannot change it. What you control is what happens in the next
 few milliseconds, which is covered under [Security](#security).
 
-**Fees are not zero.** In sandbox the institution transfer fee is 0.01 USDC and gas is 0, so the
-customer is charged 50.01 and the merchant receives 50. The receipt shows both. Hiding it is the
-kind of thing a merchant finds out about a week later.
+**There are two different fees and you should show both.** The exchange charges a withdrawal fee,
+quoted by Mesh in the payment preview: 0.01 USDC in sandbox, with gas at 0. Separately, `clientFee`
+on the link token is your own cut, taken as a ratio of the order rather than a cash figure, and
+this build sets it to $2 handling via `NEXT_PUBLIC_MERCHANT_HANDLING_FEE`. Neither changes what
+lands at the destination, which stays at exactly $50. The bag, the checkout and the receipt all
+show the arithmetic. Hiding it is the kind of thing a merchant finds out about a week later.
+
+**Two catalogues, two different questions.** `transfers/managed/integrations` tells you who *could*
+settle USDC on Ethereum: 13 entries here, including Kraken, Robinhood, Uphold and CashApp.
+`integrations` tells you who Link will actually *offer* right now: 5 in sandbox, because only
+Coinbase and Binance have simulated accounts and the rest would open a real exchange login. The
+Providers tab shows both, so "can we take Kraken" gets answered with data. Bybit is in neither
+list for this client, so that one is a Mesh account question rather than a code change.
 
 ---
 
@@ -243,6 +259,7 @@ controls.
 | `MERCHANT_ADDRESS` | yes | The destination wallet |
 | `MERCHANT_NETWORK_ID` | yes | Ethereum, `e3c7fdd8-b1fc-4e51-85ae-bb276e075611` |
 | `MESH_COINBASE_INTEGRATION_ID` | no | Blank (default) shows Mesh's picker. Set it to open straight on one provider |
+| `NEXT_PUBLIC_MERCHANT_HANDLING_FEE` | no | Merchant fee in dollars, sent as Mesh's `clientFee`. `0` for none |
 | `UPSTASH_REDIS_REST_URL` / `_TOKEN` | no | Without these the app uses process memory |
 | `MESH_WEBHOOK_SECRET` | no | Sandbox Transfer Webhook Callback URI. Shown once |
 
@@ -389,6 +406,14 @@ Neither works in process memory on Vercel. Nothing else needs a database.
 manifest and the receipt. That reducer is the most tested thing in the codebase because it is
 where a regression would actually cost something.
 
+**One pair, free delivery, and both for the same reason.** The Mesh payment is for a fixed amount,
+so a quantity control or a delivery charge would put the bag total and the money that actually
+moves out of step. A checkout whose total disagrees with its payment is the one thing that cannot
+happen, so the constraint is designed in rather than papered over.
+
+**The bag lives in sessionStorage.** It survives a refresh and dies with the tab. A shop that
+remembers your bag next week is right for a shop and wrong for a demo that should open clean.
+
 **Tailwind with tokens, no component library.** The design is bespoke enough that a component
 library would be fought rather than used.
 
@@ -405,9 +430,10 @@ that would reject a value Mesh itself sent.
 npm test
 ```
 
-45 tests over the logic where a regression would cost something: webhook HMAC verification
+53 tests over the logic where a regression would cost something: webhook HMAC verification
 including the re-serialisation trap, `EventId` idempotency, both link token request builders, the
-event to order reducer, and money formatting. Runs in under a second and needs no secrets.
+merchant fee ratio and the guarantee that it never changes the destination amount, the event to
+order reducer, and money formatting. Runs in under a second and needs no secrets.
 
 The reducer tests use trimmed copies of real sandbox payloads captured during the build, including
 the two failures that actually happened: a MetaMask wallet not present on the device, and an
