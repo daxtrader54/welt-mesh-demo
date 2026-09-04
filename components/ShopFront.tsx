@@ -98,10 +98,15 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
         </div>
       </div>
 
-      {/* Two across on a phone, so the first screen of a shoe shop has four shoes on it. The
-          cards were one per row, which pushed three of the four products below the fold and made
-          the listing scroll like a feed. */}
-      <ul className="grid grid-cols-2 gap-x-3 gap-y-6 pt-5 sm:gap-x-6 sm:gap-y-10 sm:pt-10 lg:grid-cols-4">
+      {/**
+       * Two across at every width. Four products, so 2x2 is the whole range in one block.
+       *
+       * One per row buried three of the four below the fold on a phone. Four across fixed that and
+       * introduced the opposite problem on a desktop: a 250px card holding a 3:2 frame renders the
+       * shoe about 200px wide with the rest of the card empty, which is a thumbnail strip rather
+       * than a product grid. Half the row each puts the photograph at a size worth looking at.
+       */}
+      <ul className="grid grid-cols-2 gap-x-3 gap-y-6 pt-5 sm:gap-x-8 sm:gap-y-10 sm:pt-10">
         {COLOURWAYS.map((c, i) => {
           const run = sizeRunFor(c.id)
           return (
@@ -117,17 +122,18 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
                   src={plateSrc(c.id, 'lateral')}
                   alt={`${PRODUCT.name} in ${c.name}`}
                   fill
-                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                  priority={i < 4}
+                  sizes="(max-width: 640px) 50vw, 590px"
+                  // The first row only. At 2x2 the other two are below the fold at every width,
+                  // and the images are now half a container wide rather than a quarter, so
+                  // preloading all four costs real bytes on a phone.
+                  priority={i < 2}
                   className="object-contain p-2 transition-transform duration-300 group-hover:scale-[1.04]"
                 />
 
-                <span className="data absolute left-3 top-3 text-xs text-faint">
-                  {String(i + 1).padStart(2, '0')}
-                </span>
-
+                {/* No index number. Numbering encodes a sequence, and four colourways of one shoe
+                    are not one: nothing follows 01 and nothing depends on it. */}
                 <span
-                  className="data absolute left-3 top-9 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]"
+                  className="data absolute left-3 top-3 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]"
                   style={{ background: 'var(--color-ink)', color: 'var(--color-plate)' }}
                 >
                   -{SAVING_PERCENT}%
@@ -154,23 +160,19 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
                 <span className="data shrink-0 text-sm font-semibold">{usd(PRODUCT.price)}</span>
               </div>
               {/**
-               * This colourway's own run, not the shop's.
+               * This colourway's own availability, not the shop's.
                *
-               * Every card used to print the same "UK 7 to 12 · 2 sold out" off one global size
-               * list, so four products advertised identical availability. Stock is per colourway
-               * now, and this reads the same numbers the size picker and the link token do.
+               * How many sizes are left is the part a shopper acts on from a listing. Which sizes
+               * they are is the picker's job on the next screen, and printing the range here made
+               * a two-line label out of a one-line fact.
                */}
               <div className="mt-0.5 flex items-baseline justify-between gap-2 sm:gap-3">
-                {/* Wraps rather than truncates. At two cards across on a 390px screen this line
-                    is close to the card width, and clipping it would drop "4 of 6 sizes", which is
-                    the half that tells a shopper anything. Grid rows align, so a second line on
-                    one card does not stagger the others. */}
                 <span className="label">
                   {run.stocked === 0
                     ? 'Sold out'
                     : run.stocked === run.total
-                      ? `UK ${run.from} to ${run.to} · full run`
-                      : `UK ${run.from} to ${run.to} · ${run.stocked} of ${run.total} sizes`}
+                      ? 'Full size run'
+                      : `${run.stocked} of ${run.total} sizes`}
                 </span>
                 <span className="data hidden shrink-0 text-xs text-faint line-through sm:inline">
                   {usd(PRODUCT.rrp)}
