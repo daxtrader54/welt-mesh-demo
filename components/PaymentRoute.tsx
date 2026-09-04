@@ -152,15 +152,19 @@ export function Manifest({ order }: { order: OrderState }) {
                   {step.label}
                 </span>
 
+                {/* Shopper-facing facts only. Broker type strings, preview UUIDs and transaction
+                    hashes live in the panel, where someone can do something with them. */}
                 <dl className="flex min-w-0 flex-1 flex-wrap gap-x-6 gap-y-1">
-                  {step.facts.map(f => (
-                    <div key={f.label} className="flex min-w-0 items-baseline gap-1.5">
-                      <dt className="label shrink-0">{f.label}</dt>
-                      <dd className="data max-w-[26ch] truncate text-xs" title={f.value}>
-                        {f.value}
-                      </dd>
-                    </div>
-                  ))}
+                  {step.facts
+                    .filter(f => !f.technical)
+                    .map(f => (
+                      <div key={f.label} className="flex min-w-0 items-baseline gap-1.5">
+                        <dt className="label shrink-0">{f.label}</dt>
+                        <dd className="data max-w-[26ch] truncate text-xs" title={f.value}>
+                          {f.value}
+                        </dd>
+                      </div>
+                    ))}
                 </dl>
 
                 <span className="data shrink-0 text-xs text-faint">
@@ -171,6 +175,10 @@ export function Manifest({ order }: { order: OrderState }) {
           )
         })}
       </ol>
+
+      <p className="note mt-3">
+        Transaction references and provider identifiers are in Behind the payment.
+      </p>
 
       {order.status === 'paid' && (
         <p className="mt-4 max-w-2xl text-sm text-muted">

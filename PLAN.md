@@ -1,6 +1,19 @@
 # WELT — implementation plan
 
-Agreed 3 September 2026, revised 4 September. Awaiting approval before any application code.
+> **This is the plan as it was agreed, kept unedited as a record of what was decided and why.**
+>
+> The application has moved past it in several places, and where the two disagree the application
+> is correct. The README describes what was actually built. The notable divergences: the shop
+> starts on a listing page rather than the product page; card and Apple Pay open sheets rather than
+> sitting disabled; the connect session shows Mesh's picker while the payment session is
+> deep-linked, which is the reverse of what section 0c proposed; the merchant accepts three
+> stablecoins rather than one; and there are now eight route handlers rather than six.
+>
+> Sections 0b and 0c are the part worth reading. They are the measured results of running the
+> whole flow against the sandbox before any application code was written, and every number in them
+> was observed rather than assumed.
+
+Agreed 3 September 2026, revised 4 September.
 
 ## 0. Who this is for
 

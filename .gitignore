@@ -10,3 +10,9 @@ next-env.d.ts
 .DS_Store
 .vercel
 coverage
+
+# Mesh's own take-home brief. Kept locally and in the submission, not published: this repo is
+# public, and putting a company's exercise on GitHub hands it to every future candidate.
+initial-spec.md
+appendix.md
+additional-context.md

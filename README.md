@@ -1,6 +1,6 @@
 # WELT
 
-A single-product shoe shop where the checkout is powered by [Mesh](https://meshconnect.com).
+A single-product shoe shop where the checkout is powered by [Mesh](https://www.meshpay.com).
 
 You pick a size, hit pay, connect a Coinbase account, see what you actually hold, and pay $50 in
 USDC on Ethereum. Underneath there is a second layer that shows what really happened: the real
