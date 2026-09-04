@@ -82,6 +82,13 @@ export async function GET() {
        */
       funding: config.ok ? config.data.holdings : null,
       fundingStatus: config.ok ? config.data.fundingStatus : null,
+      /**
+       * Why the per-account answer is missing, when it is. Silence here was the problem: the
+       * holdings list simply showed no verdict and there was no way to tell whether Mesh had said
+       * nothing, said no, or never been asked.
+       */
+      fundingError: config.ok ? null : (config.error.detail ?? config.error.title),
+      fundingMs: config.ms,
       /** Stated on screen: Mesh documents the quote endpoint as Coinbase-only for now. */
       brokerType: connection.brokerType,
       amountInFiat: PRODUCT.price

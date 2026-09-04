@@ -230,13 +230,19 @@ export function Portfolio({
                 >
                   <span className="data w-16 shrink-0 text-xs font-medium">{p.symbol}</span>
                   <span className="note min-w-0 flex-1 truncate">{p.name}</span>
+                  {/**
+                   * Three states again, and the middle one is the one that was missing. Mesh said
+                   * yes, Mesh said no, or Mesh was never asked. Rendering "asked and refused" and
+                   * "never asked" both as blank space is what made a failing configure call look
+                   * like an account where nothing happens to be convertible.
+                   */}
                   {canPay ? (
                     <span className="note shrink-0" style={{ color: 'var(--plate-accent)' }}>
                       {f!.eligible ? 'can pay' : 'can pay, converted'}
                     </span>
-                  ) : (
-                    why && <span className="note shrink-0">{why}</span>
-                  )}
+                  ) : f ? (
+                    <span className="note shrink-0">{why ?? 'not eligible for this order'}</span>
+                  ) : null}
                   <span className="data shrink-0 text-xs">{usd(p.marketValue)}</span>
                 </li>
               )
@@ -254,9 +260,11 @@ export function Portfolio({
            */}
           <p className="note mt-3">
             The merchant settles in {PRODUCT.settlement.symbol}, which does not mean these cannot
-            pay for the order. Mesh can convert a held asset into the one being collected, and it
-            offers that at the payment step rather than here. All {positions.length} balances came
-            from one connection.
+            pay for the order. Mesh can convert a held asset into the one being collected, and the
+            choice belongs to its own screen: press Pay, then change <em>Pay with</em> on Mesh&apos;s
+            payment sheet. There is no field on a link token for a merchant to make that choice on
+            a shopper&apos;s behalf, so a picker here would be for show. All {positions.length}{' '}
+            balances came from one connection.
           </p>
         </details>
       )}

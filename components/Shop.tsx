@@ -261,6 +261,18 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           if (!qjson.ok) return setQuotes([])
           setQuotes(qjson.quotes)
           setAssetFunding(qjson.funding ?? null)
+          /**
+           * Logged as its own call so the panel shows whether Mesh was asked which of this account
+           * can pay, and what it said. It rides inside the quotes response, so without this line it
+           * was invisible: a failure looked exactly like an account where nothing is convertible.
+           */
+          note(
+            'GET /api/mesh/quotes → configure',
+            'POST /api/v1/transfers/managed/configure',
+            qjson.fundingMs ?? null,
+            Boolean(qjson.funding)
+          )
+          if (qjson.fundingError) console.warn('[welt] configure:', qjson.fundingError)
           // Default to the first thing that can actually pay, preferring the settlement asset.
           const best =
             qjson.quotes.find((q: Quote) => q.eligible && q.primary) ??
