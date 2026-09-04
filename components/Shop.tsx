@@ -1,0 +1,673 @@
+'use client'
+
+import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import type { LinkEventType, LinkPayload, TransferFinishedPayload } from '@meshconnect/web-link-sdk'
+import { failure, type Failure } from '@/lib/failure'
+import { usd } from '@/lib/format'
+import { describeExitPage, initialOrderState, reduceOrder } from '@/lib/order/state'
+import {
+  BRAND,
+  DEFAULT_COLOURWAY,
+  HANDLING_FEE,
+  PRODUCT,
+  SPEC,
+  colourway as findColourway,
+  type ColourwayId,
+  type PlateId
+} from '@/lib/product'
+import { AddedToBag, BagView, type BagItem } from './Bag'
+import { ColourwayPicker, PriceBlock, SizePicker } from './Checkout'
+import { FundingNote } from './FundingPicker'
+import { FailureNotice, Footer, SandboxNotice } from './Notices'
+import { FundingSource, Manifest, type Funding } from './PaymentRoute'
+import { PretendPaymentModal } from './PretendPayment'
+import { ProductPlate } from './ProductPlate'
+import { ProductPanels } from './Reviews'
+import { Receipt } from './Receipt'
+import { ConsoleBar, TechnicalView, type ConnectionSummary, type ServerCall } from './TechnicalView'
+import { useMeshLink } from './useMeshLink'
+
+/**
+ * The shop: product, bag, checkout, confirmation.
+ *
+ * The funnel is deliberate. A pay button on the product page is not how anyone buys shoes, and the
+ * payment method belongs at checkout, after the bag, which is where a customer expects to choose
+ * it. It costs three clicks before Mesh appears and buys the thing the demo depends on, which is
+ * that this reads as a shop rather than an integration with a photograph attached.
+ *
+ * Two Link sessions inside that. The first connects and stops, which is the only way to read
+ * holdings before asking anyone to pay. The second carries the payment, and whichever account
+ * actually funds it comes back on `transferPreviewed` and ends up on the receipt.
+ */
+
+type Step = 'product' | 'bag' | 'checkout' | 'done'
+
+export function Shop({ demoMode }: { demoMode: boolean }) {
+  const [step, setStep] = useState<Step>('product')
+  const [colourwayId, setColourwayId] = useState<ColourwayId>(DEFAULT_COLOURWAY)
+  const [plate, setPlate] = useState<PlateId>('lateral')
+  const [size, setSize] = useState<string | null>(null)
+  const [bag, setBag] = useState<BagItem | null>(null)
+  /** Kept after the bag is emptied, so the confirmation still has something to show. */
+  const [purchased, setPurchased] = useState<BagItem | null>(null)
+  const [justAdded, setJustAdded] = useState(false)
+  const [pretend, setPretend] = useState<'card' | 'applePay' | null>(null)
+  const [sizeNudge, setSizeNudge] = useState(false)
+
+  const [order, dispatch] = useReducer(reduceOrder, undefined, initialOrderState)
+  const [funding, setFunding] = useState<Funding | null>(null)
+  const [connection, setConnection] = useState<ConnectionSummary | null>(null)
+  /**
+   * The Mesh integration the shopper chose. Captured from the connect session's exit summary and
+   * replayed into the payment session, so the picker appears once in a checkout rather than twice.
+   */
+  const [pickedIntegrationId, setPickedIntegrationId] = useState<string | null>(null)
+  const [orderId, setOrderId] = useState<string | null>(null)
+  const [calls, setCalls] = useState<ServerCall[]>([])
+  const [drawer, setDrawer] = useState(false)
+
+  const colourway = findColourway(colourwayId)
+  /** True when what is on screen is exactly what is already in the bag. */
+  const inBag = Boolean(bag && bag.colourway.id === colourwayId && bag.size === size)
+  const orderIdRef = useRef<string | null>(null)
+  orderIdRef.current = orderId
+
+  const note = useCallback((route: string, mesh: string | null, ms: number | null, ok: boolean) => {
+    setCalls(prev => [...prev, { at: Date.now(), route, mesh, ms, ok }])
+  }, [])
+
+  const fail = useCallback((f: Failure) => dispatch({ type: 'failed', at: Date.now(), failure: f }), [])
+
+  /** Hand the auth token to the server, then read the portfolio with it. */
+  const takeConnection = useCallback(
+    async (payload: LinkPayload) => {
+      const access = payload.accessToken
+      const account = access?.accountTokens?.[0]
+      if (!access || !account) return
+
+      try {
+        const res = await fetch('/api/mesh/connection', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            brokerType: access.brokerType,
+            brokerName: access.brokerName,
+            accountName: account.account?.accountName ?? null,
+            authToken: account.accessToken,
+            tokenId: account.tokenId ?? null,
+            expiresInSeconds: access.expiresInSeconds ?? null
+          })
+        })
+        const json = await res.json()
+        note('POST /api/mesh/connection', null, null, json.ok)
+        if (json.ok) setConnection(json.connection)
+      } catch {
+        // Not fatal on its own. The portfolio read below reports the real consequence.
+      }
+
+      try {
+        const started = Date.now()
+        const res = await fetch('/api/mesh/portfolio')
+        const json = await res.json()
+        note('GET /api/mesh/portfolio', 'POST /api/v1/holdings/get + /value', Date.now() - started, json.ok)
+
+        if (!json.ok) {
+          dispatch({ type: 'holdings:failed', at: Date.now(), failure: json.error })
+          return
+        }
+
+        setFunding({ provider: json.provider, accountName: json.accountName, settlement: json.settlement })
+        dispatch({
+          type: 'holdings:done',
+          at: Date.now(),
+          institution: json.provider,
+          usdc: json.settlement?.amount ?? null,
+          positions: json.positions.length
+        })
+      } catch (err) {
+        dispatch({
+          type: 'holdings:failed',
+          at: Date.now(),
+          failure: failure('portfolio_failed', {
+            detail: err instanceof Error ? err.message : String(err)
+          })
+        })
+      }
+    },
+    [note]
+  )
+
+  const onTransferFinished = useCallback(
+    async (payload: TransferFinishedPayload) => {
+      setStep('done')
+      // The order is placed, so the bag is no longer holding anything. Leaving "Bag (1)" in the
+      // header after a confirmed purchase is the detail that made it feel unfinished.
+      setBag(current => {
+        if (current) setPurchased(current)
+        return null
+      })
+      const id = orderIdRef.current
+      if (!id) return
+      try {
+        const res = await fetch(`/api/orders/${id}`, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            status: 'paid',
+            txId: payload.txId,
+            transferId: payload.transferId,
+            txHash: payload.txHash,
+            totalAmountInFiat: payload.totalAmountInFiat
+          })
+        })
+        note('PATCH /api/orders/:id', null, null, res.ok)
+      } catch {
+        // The receipt is already complete from the SDK payload. This write is for the server's own
+        // record and for the webhook to reconcile against, so a failure here is not shown.
+      }
+    },
+    [note]
+  )
+
+  const { open, busy } = useMeshLink({
+    onEvent: event => dispatch({ type: 'link', at: Date.now(), event: event as LinkEventType }),
+    onConnected: takeConnection,
+    onTransferFinished,
+    onExit: (error, summary) => {
+      const page = summary?.page
+      if (summary?.selectedIntegration?.id) setPickedIntegrationId(summary.selectedIntegration.id)
+      // Closing on the success page is not a failure, it is the end of a completed payment.
+      if (page === 'transferExecutedPage') return
+      if (order.status === 'paid' || order.status === 'settled') return
+      if (!error && (order.status === 'connected' || order.status === 'draft')) return
+
+      const where = describeExitPage(page)
+      fail(
+        failure('abandoned', {
+          title: where ? `Payment cancelled ${where}` : 'Payment cancelled',
+          detail: error ?? `Closed on ${page ?? 'an unknown page'}`
+        })
+      )
+    },
+    onFailure: fail,
+    onOpening: info => {
+      note('POST /api/mesh/link-token', 'POST /api/v1/linktoken', info.ms, true)
+      if (info.orderId) setOrderId(info.orderId)
+    }
+  })
+
+  const addToBag = useCallback(() => {
+    if (!size) {
+      setSizeNudge(true)
+      return
+    }
+    setBag({ colourway, size })
+    setJustAdded(true)
+  }, [colourway, size])
+
+  const startConnect = useCallback(() => {
+    setPretend(null)
+    dispatch({ type: 'connect:started', at: Date.now() })
+    void open('connect')
+  }, [open])
+
+  const startPayment = useCallback(
+    (changeAccount = false) => {
+      if (!bag) return
+      dispatch({ type: 'pay:started', at: Date.now() })
+      void open('pay', {
+        colourway: bag.colourway.id,
+        size: bag.size,
+        // Omitting this restores Mesh's picker, which is exactly what "change account" is for.
+        ...(changeAccount || !pickedIntegrationId ? {} : { integrationId: pickedIntegrationId })
+      })
+    },
+    [open, bag, pickedIntegrationId]
+  )
+
+  /** Poll for the webhook. Bounded, because a sandbox that never sends one must not hang. */
+  useEffect(() => {
+    if (order.status !== 'paid' || !orderId) return
+    let attempts = 0
+    let cancelled = false
+
+    const tick = async () => {
+      if (cancelled || attempts >= 12) return
+      attempts += 1
+      try {
+        const res = await fetch(`/api/orders/${orderId}`)
+        const json = await res.json()
+        if (json.ok && json.order?.status === 'settled') {
+          dispatch({ type: 'settled', at: Date.now(), txHash: json.order.txHash })
+          return
+        }
+      } catch {
+        // Ignore. The next tick tries again, and the receipt is complete without this.
+      }
+      if (!cancelled) setTimeout(tick, 3000)
+    }
+
+    const timer = setTimeout(tick, 2000)
+    return () => {
+      cancelled = true
+      clearTimeout(timer)
+    }
+  }, [order.status, orderId])
+
+  const reset = useCallback(async () => {
+    await fetch('/api/session/reset', { method: 'POST' }).catch(() => {})
+    dispatch({ type: 'reset' })
+    setStep('product')
+    setBag(null)
+    setPurchased(null)
+    setPickedIntegrationId(null)
+    setFunding(null)
+    setConnection(null)
+    setOrderId(null)
+    setCalls([])
+    setSize(null)
+    setDrawer(false)
+    window.scrollTo({ top: 0 })
+  }, [])
+
+  const goto = useCallback((next: Step) => {
+    setStep(next)
+    setJustAdded(false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [])
+
+  /**
+   * The bag survives a refresh and dies with the tab. sessionStorage rather than localStorage on
+   * purpose: a shop that remembers your bag next week is right for a shop and wrong for a demo
+   * that should start clean every time someone opens it.
+   */
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem('welt_bag')
+      if (saved) {
+        const parsed = JSON.parse(saved) as { colourwayId: ColourwayId; size: string }
+        setBag({ colourway: findColourway(parsed.colourwayId), size: parsed.size })
+        setColourwayId(parsed.colourwayId)
+        setSize(parsed.size)
+      }
+    } catch {
+      // A malformed or blocked store just means an empty bag. Nothing to report.
+    }
+  }, [])
+
+  useEffect(() => {
+    try {
+      if (bag) sessionStorage.setItem('welt_bag', JSON.stringify({ colourwayId: bag.colourway.id, size: bag.size }))
+      else sessionStorage.removeItem('welt_bag')
+    } catch {
+      // Private browsing can refuse. The bag still works for this page view.
+    }
+  }, [bag])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === 'd' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
+        e.preventDefault()
+        setDrawer(v => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
+  const paid = order.status === 'paid' || order.status === 'settled'
+  const settled = order.status === 'settled'
+  const connected = funding !== null && !paid
+  const showManifest = (step === 'checkout' || step === 'done') && order.status !== 'draft'
+  /** The bag empties on purchase, so the confirmation reads from what was bought. */
+  const item = bag ?? purchased
+
+  return (
+    <div className="flex" style={{ ['--plate-accent' as string]: colourway.accent }}>
+      <div className="min-w-0 flex-1">
+        <div className="mx-auto max-w-[1180px] px-5 pb-24 sm:px-6 lg:px-10">
+          <header className="rule-b flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 py-5 sm:py-6">
+            <button
+              type="button"
+              onClick={() => goto('product')}
+              className="flex items-baseline gap-5 text-left"
+            >
+              <span className="text-xl font-extrabold leading-none tracking-[0.2em] sm:text-2xl">
+                {BRAND}
+              </span>
+              <span className="label hidden sm:inline">
+                {PRODUCT.brand} · {PRODUCT.name}
+              </span>
+            </button>
+
+            <div className="flex items-baseline gap-6">
+              <span className="label hidden md:inline">Free delivery</span>
+              <button
+                type="button"
+                onClick={() => bag && goto('bag')}
+                disabled={!bag}
+                className="btn-quiet disabled:opacity-50"
+              >
+                Bag ({bag ? 1 : 0})
+              </button>
+            </div>
+          </header>
+
+          {step === 'product' && (
+            <>
+              {/* Explicit grid placement, because mobile stacks in DOM order. The first pass put
+                  the entire spec sheet between the photograph and the price. */}
+              <main className="grid gap-x-16 gap-y-10 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
+                <section className="lg:col-start-1 lg:row-start-1">
+                  <ProductPlate colourway={colourwayId} plate={plate} onPlateChange={setPlate} />
+                </section>
+
+                <section className="flex flex-col gap-7 lg:col-start-2 lg:row-start-1">
+                  <div>
+                    <p className="label mb-2">{PRODUCT.brand}</p>
+                    <h1 className="text-[2.4rem] font-bold leading-[0.95] tracking-[-0.03em] sm:text-[2.6rem]">
+                      {PRODUCT.name}
+                    </h1>
+                    <p className="mt-4 text-sm leading-relaxed text-muted">
+                      Lightweight trainer with a mesh upper and a memory foam sockliner. Four
+                      colourways, clearance pricing, one pair per order.
+                    </p>
+                    <div className="mt-6">
+                      <PriceBlock />
+                    </div>
+                  </div>
+
+                  <ColourwayPicker value={colourwayId} onChange={setColourwayId} />
+
+                  <div>
+                    <SizePicker
+                      value={size}
+                      onChange={v => {
+                        setSize(v)
+                        setSizeNudge(false)
+                      }}
+                    />
+                    {sizeNudge && !size && (
+                      <p className="mt-2 text-sm font-medium" style={{ color: 'var(--color-warn)' }}>
+                        Pick a size first.
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    {inBag ? (
+                      <>
+                        <div className="flex w-full items-center justify-center gap-2 border-2 border-ink py-3.5">
+                          <span
+                            className="grid h-4 w-4 place-items-center rounded-full text-[10px] font-bold"
+                            style={{ background: 'var(--plate-accent)', color: 'var(--color-plate)' }}
+                            aria-hidden
+                          >
+                            ✓
+                          </span>
+                          <span className="data text-sm font-semibold uppercase tracking-[0.08em]">
+                            Added to bag
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => goto('bag')}
+                          className="btn-primary mt-2 w-full py-4 text-sm"
+                        >
+                          View bag
+                        </button>
+                        <p className="note mt-2">
+                          One pair per order. Change the colour or size to swap what is in the bag.
+                        </p>
+                      </>
+                    ) : (
+                      <button type="button" onClick={addToBag} className="btn-primary w-full py-4 text-sm">
+                        {bag ? 'Update bag' : 'Add to bag'}
+                      </button>
+                    )}
+
+                    <div className="rule-t mt-5 flex items-baseline justify-between gap-4 pt-3">
+                      <span className="text-sm font-medium">Standard delivery</span>
+                      <span className="data text-sm">Free</span>
+                    </div>
+                    <p className="note mt-1">Dispatched the next working day. 30 day returns.</p>
+                  </div>
+
+                  <ProductPanels />
+                </section>
+
+                <section className="lg:col-start-1 lg:row-start-2">
+                  <dl className="rule-t pt-5">
+                    {SPEC.map(s => (
+                      <div key={s.n} className="rule-b flex items-baseline gap-5 py-2.5">
+                        <dt className="data w-6 shrink-0 text-xs text-faint">{s.n}</dt>
+                        <dt className="label w-24 shrink-0">{s.label}</dt>
+                        <dd className="text-sm">{s.value}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              </main>
+            </>
+          )}
+
+          {step === 'bag' && bag && (
+            <BagView
+              item={bag}
+              onCheckout={() => goto('checkout')}
+              onBack={() => goto('product')}
+              onRemove={() => {
+                setBag(null)
+                goto('product')
+              }}
+            />
+          )}
+
+          {(step === 'checkout' || step === 'done') && item && (
+            <main className="grid gap-x-16 gap-y-10 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
+              <section className="order-2 lg:order-none lg:col-start-1 lg:row-start-1">
+                <ProductPlate
+                  colourway={item.colourway.id}
+                  plate={plate}
+                  onPlateChange={setPlate}
+                  owned={paid}
+                />
+              </section>
+
+              <section className="order-1 flex flex-col gap-7 lg:order-none lg:col-start-2 lg:row-start-1">
+                {step === 'checkout' && !paid && (
+                  <>
+                    <div>
+                      <h1 className="text-[2rem] font-bold leading-[1] tracking-[-0.02em]">
+                        How would you like to pay?
+                      </h1>
+                      <dl className="rule-t mt-5 pt-3">
+                        <div className="flex items-baseline justify-between gap-4 py-1">
+                          <dt className="text-sm text-muted">
+                            {PRODUCT.name} · {item.colourway.name} · UK {item.size}
+                          </dt>
+                          <dd className="data text-sm">{usd(PRODUCT.price)}</dd>
+                        </div>
+                        {HANDLING_FEE > 0 && (
+                          <div className="flex items-baseline justify-between gap-4 py-1">
+                            <dt className="text-sm text-muted">Handling</dt>
+                            <dd className="data text-sm">{usd(HANDLING_FEE)}</dd>
+                          </div>
+                        )}
+                        <div className="rule-t mt-2 flex items-baseline justify-between gap-4 pt-2">
+                          <dt className="text-base font-semibold">Total</dt>
+                          <dd className="data text-xl font-semibold">
+                            {usd(PRODUCT.price + HANDLING_FEE)}
+                          </dd>
+                        </div>
+                      </dl>
+                    </div>
+
+                    {order.failure && (
+                      <FailureNotice
+                        failure={order.failure}
+                        onRetry={
+                          order.failure.retryable
+                            ? funding
+                              ? () => startPayment()
+                              : startConnect
+                            : undefined
+                        }
+                        onDismiss={() => dispatch({ type: 'reset' })}
+                        dismissLabel={funding ? 'Back to the bag' : 'Choose another account'}
+                      />
+                    )}
+
+                    {!connected && !order.failure && (
+                      <>
+                        <div className="space-y-2">
+                          {[
+                            { key: 'card' as const, name: 'Card', note: 'Visa, Mastercard, Amex' },
+                            { key: 'applePay' as const, name: 'Apple Pay', note: 'One tap' }
+                          ].map(m => (
+                            <button
+                              key={m.key}
+                              type="button"
+                              onClick={() => setPretend(m.key)}
+                              className="flex w-full items-center gap-3 border border-rule bg-plate px-4 py-3.5 text-left transition-colors hover:border-ink"
+                            >
+                              <span className="h-4 w-4 shrink-0 rounded-full border border-rule" aria-hidden />
+                              <span className="flex-1 text-sm font-medium">{m.name}</span>
+                              <span className="note">{m.note}</span>
+                            </button>
+                          ))}
+
+                          <div className="border-2 border-ink bg-plate px-4 pb-4 pt-3.5">
+                            <div className="flex items-center gap-3">
+                              <span
+                                className="grid h-4 w-4 shrink-0 place-items-center rounded-full border border-ink"
+                                aria-hidden
+                              >
+                                <span className="h-2 w-2 rounded-full bg-ink" />
+                              </span>
+                              <span className="flex-1 text-sm font-semibold">Crypto account</span>
+                              <span className="note">Settles in {PRODUCT.settlement.symbol}</span>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={startConnect}
+                              disabled={busy}
+                              className="btn-primary mt-4 w-full py-4 text-sm"
+                            >
+                              {busy ? 'Opening…' : `Pay with crypto · ${usd(PRODUCT.price + HANDLING_FEE)}`}
+                            </button>
+                            <div className="mt-3">
+                              <FundingNote />
+                            </div>
+                          </div>
+                        </div>
+
+                        <SandboxNotice />
+                      </>
+                    )}
+
+                    {connected && !order.failure && (
+                      <>
+                        <FundingSource
+                          funding={funding}
+                          onChangeAccount={() => startPayment(true)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => startPayment()}
+                          disabled={busy}
+                          className="btn-primary w-full py-4 text-sm"
+                        >
+                          {busy ? 'Opening…' : `Pay ${usd(PRODUCT.price + HANDLING_FEE)}`}
+                        </button>
+                        <SandboxNotice compact />
+                      </>
+                    )}
+                  </>
+                )}
+
+                {step === 'done' && (
+                  <>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="grid h-5 w-5 place-items-center rounded-full text-[11px] font-bold"
+                          style={{ background: 'var(--plate-accent)', color: 'var(--color-plate)' }}
+                          aria-hidden
+                        >
+                          ✓
+                        </span>
+                        <span className="label text-ink">
+                          {settled ? 'Order settled' : 'Order confirmed'}
+                        </span>
+                      </div>
+                      <h1 className="mt-3 text-[2.4rem] font-bold leading-[0.95] tracking-[-0.03em]">
+                        Yours.
+                      </h1>
+                      <p className="mt-3 text-sm leading-relaxed text-muted">
+                        Order <span className="data">{orderId}</span> is paid. We took{' '}
+                        {usd(order.payment.totalAmountInFiat ?? PRODUCT.price)} in{' '}
+                        {order.payment.symbol} from your {order.source?.name ?? 'connected'} account
+                        and settled it to the merchant on {order.payment.networkName}.
+                      </p>
+                    </div>
+
+                    <Receipt
+                      order={order}
+                      orderId={orderId}
+                      size={`UK ${item.size}`}
+                      colourway={item.colourway}
+                      settled={settled}
+                    />
+
+                    <div className="rule-t pt-5">
+                      <button type="button" onClick={reset} className="btn-primary w-full py-4 text-sm">
+                        Start a new order
+                      </button>
+                      <p className="note mt-3">
+                        Demonstration store, so nothing ships. Starting again clears this order and
+                        keeps the account connected, so the next run does not sign in again.
+                      </p>
+                    </div>
+                  </>
+                )}
+              </section>
+            </main>
+          )}
+
+          {showManifest && <Manifest order={order} />}
+
+          <Footer />
+        </div>
+      </div>
+
+      {justAdded && bag && (
+        <AddedToBag
+          item={bag}
+          onViewBag={() => goto('bag')}
+          onKeepShopping={() => setJustAdded(false)}
+        />
+      )}
+
+      <PretendPaymentModal
+        method={pretend}
+        amount={usd(PRODUCT.price + HANDLING_FEE)}
+        onClose={() => setPretend(null)}
+        onUseCrypto={startConnect}
+      />
+
+      {!demoMode && <ConsoleBar order={order} open={drawer} onToggle={() => setDrawer(v => !v)} />}
+
+      <TechnicalView
+        open={drawer || demoMode}
+        docked={demoMode}
+        onClose={() => setDrawer(false)}
+        order={order}
+        calls={calls}
+        connection={connection}
+        onReset={reset}
+      />
+    </div>
+  )
+}
