@@ -78,6 +78,52 @@ export type HoldingsValueResponse = z.infer<typeof holdingsValueResponse>
 export type CryptoPosition = z.infer<typeof cryptoPosition>
 
 /**
+ * A transfer quote, per asset.
+ *
+ * This is what turns "we think you can pay with this" into Mesh's own answer. It reports whether
+ * a given asset can actually fund a given destination, why not when it cannot, and what it would
+ * cost — including whether the money comes from a balance the shopper already holds, from buying
+ * power, or from a card they have on file at the exchange.
+ */
+const feeAmount = z.object({
+  amountInFiat: z.number().nullish(),
+  amountInCryptocurrency: z.number().nullish(),
+  cryptocurrencySymbol: z.string().nullish()
+})
+
+export const quoteResponse = envelope.extend({
+  content: z
+    .object({
+      isEligible: z.boolean().nullish(),
+      ineligibilityReason: z.string().nullish(),
+      minEligibleAmountFiat: z.number().nullish(),
+      maxAmountFiat: z.number().nullish(),
+      fees: z
+        .object({
+          totalFeesInFiat: z.number().nullish(),
+          networkFee: feeAmount.nullish(),
+          institutionFee: feeAmount.nullish(),
+          tradingFee: feeAmount.nullish(),
+          partnerFee: feeAmount.nullish()
+        })
+        .nullish(),
+      fundingOptions: z
+        .array(
+          z.object({
+            cryptocurrencyFundingOptionType: z.string().nullish(),
+            paymentMethodType: z.string().nullish(),
+            name: z.string().nullish(),
+            usedAmountInFiat: z.number().nullish()
+          })
+        )
+        .nullish()
+    })
+    .nullish()
+})
+
+export type QuoteResponse = z.infer<typeof quoteResponse>
+
+/**
  * The webhook body. Mesh sends PascalCase here, unlike every other endpoint.
  * `EventId` is stable across retries and is the idempotency key. `Id` changes per delivery.
  */

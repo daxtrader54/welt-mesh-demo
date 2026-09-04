@@ -3,7 +3,7 @@ import { meshEnv } from '@/lib/env'
 import { failure } from '@/lib/failure'
 import { fail, guard, ok, readJson } from '@/lib/http'
 import { createConnectToken, createPaymentToken } from '@/lib/mesh/client'
-import { PRODUCT, COLOURWAYS, SIZES } from '@/lib/product'
+import { ACCEPTED_ASSETS, COLOURWAYS, PRODUCT, SIZES, isAccepted } from '@/lib/product'
 import { ensureSessionId, meshUserId } from '@/lib/session'
 import { getSession, putOrder, underRateLimit, type OrderRecord } from '@/lib/store/records'
 import { orderNumber } from '@/lib/format'
@@ -32,7 +32,12 @@ const body = z.object({
    * a provider list mid-payment goes away. Shape-checked, not allowlisted: it only deep-links
    * Link, and Mesh rejects an id that is not in this client's catalogue.
    */
-  integrationId: z.uuid().optional()
+  integrationId: z.uuid().optional(),
+  /**
+   * Which asset the shopper picked from their holdings. Validated against the merchant's accepted
+   * list, never trusted as a free string: it decides what the destination address receives.
+   */
+  asset: z.string().optional()
 })
 
 export async function POST(req: Request) {
@@ -53,6 +58,25 @@ export async function POST(req: Request) {
      */
     const withinLimit = async () => underRateLimit(sid)
 
+    /**
+     * Mesh-managed token ids for accounts this session already connected. Passing them to
+     * `createLink` is what lets a returning shopper skip the exchange login entirely.
+     *
+     * Returned on both intents. It used to be sent only with the payment token, so the connect
+     * step always showed the full sign-in even when a live connection was sitting in the session,
+     * which is exactly the case a repeat demo hits.
+     */
+    const session = await getSession(sid)
+    const accessTokens = (session?.connections ?? [])
+      .filter(c => c.tokenId)
+      .map(c => ({
+        accessToken: c.tokenId!,
+        brokerType: c.brokerType,
+        brokerName: '',
+        accountId: '',
+        accountName: ''
+      }))
+
     if (parsed.data.intent === 'connect') {
       if (!(await withinLimit())) {
         return fail(failure('rate_limited', { detail: 'Too many link tokens for this session' }), 429)
@@ -62,7 +86,7 @@ export async function POST(req: Request) {
         integrationId: parsed.data.integrationId ?? env.coinbaseIntegrationId
       })
       if (!res.ok) return fail(res.error, 502)
-      return ok({ linkToken: res.data, ms: res.ms })
+      return ok({ linkToken: res.data, ms: res.ms, accessTokens })
     }
 
     // Paying. Validate the selection, then build the order from server-side truth.
@@ -82,7 +106,19 @@ export async function POST(req: Request) {
       return fail(failure('rate_limited', { detail: 'Too many link tokens for this session' }), 429)
     }
 
-    const session = await getSession(sid)
+
+    /**
+     * One destination when the shopper chose an asset, all of them when they did not. Either way
+     * the address, the network and the amount come from server configuration, so the choice
+     * changes which stablecoin arrives and nothing else.
+     */
+    const chosen = isAccepted(parsed.data.asset) ? parsed.data.asset : null
+    const destinations = (chosen ? [{ symbol: chosen }] : ACCEPTED_ASSETS).map(a => ({
+      networkId: env.merchantNetworkId,
+      address: env.merchantAddress,
+      symbol: a.symbol
+    }))
+
     const order: OrderRecord = {
       id: orderNumber(`${sid}:${Date.now()}`),
       createdAt: Date.now(),
@@ -91,7 +127,7 @@ export async function POST(req: Request) {
       colourwayRef: colourway.ref,
       size: `UK ${size.uk}`,
       amount: PRODUCT.price,
-      symbol: PRODUCT.settlement.symbol,
+      symbol: chosen ?? PRODUCT.settlement.symbol,
       networkId: env.merchantNetworkId,
       destination: env.merchantAddress
     }
@@ -100,11 +136,7 @@ export async function POST(req: Request) {
       userId,
       integrationId: parsed.data.integrationId ?? null,
       transactionId: order.id,
-      destination: {
-        networkId: env.merchantNetworkId,
-        address: env.merchantAddress,
-        symbol: PRODUCT.settlement.symbol
-      },
+      destinations,
       amount: PRODUCT.price,
       displayAmountInFiat: PRODUCT.price,
       clientFee: env.handlingFee
@@ -117,17 +149,7 @@ export async function POST(req: Request) {
       linkToken: res.data,
       ms: res.ms,
       order: { id: order.id, amount: order.amount, symbol: order.symbol },
-      // Passed to createLink so a returning shopper is not asked to sign in again. These are
-      // Mesh-managed token ids, not credentials.
-      accessTokens: (session?.connections ?? [])
-        .filter(c => c.tokenId)
-        .map(c => ({
-          accessToken: c.tokenId!,
-          brokerType: c.brokerType,
-          brokerName: '',
-          accountId: '',
-          accountName: ''
-        }))
+      accessTokens
     })
   })
 }

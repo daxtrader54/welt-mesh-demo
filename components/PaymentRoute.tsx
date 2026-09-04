@@ -22,11 +22,14 @@ export type Funding = {
 export function FundingSource({
   funding,
   providerName,
+  payingWith,
   onChangeAccount
 }: {
   /** Null when the account connected but its balances could not be read. Not a failure. */
   funding: Funding | null
   providerName: string | null
+  /** The asset the shopper chose, when they chose one. */
+  payingWith?: string | null
   onChangeAccount: () => void
 }) {
   const s = funding?.settlement ?? null
@@ -63,7 +66,7 @@ export function FundingSource({
           <div className="text-right">
             <div className="label">Merchant receives</div>
             <div className="data text-sm">
-              {usd(PRODUCT.price)} {PRODUCT.settlement.symbol}
+              {usd(PRODUCT.price)} {payingWith ?? PRODUCT.settlement.symbol}
             </div>
             <div className="label">on {PRODUCT.settlement.network}</div>
           </div>

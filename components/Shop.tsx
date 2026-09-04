@@ -20,6 +20,7 @@ import { ColourwayPicker, PriceBlock, SizePicker } from './Checkout'
 import { FundingNote } from './FundingPicker'
 import { FailureNotice, Footer, SandboxNotice } from './Notices'
 import { FundingSource, Manifest, type Funding } from './PaymentRoute'
+import { Portfolio, type Position, type Quote } from './Portfolio'
 import { PretendPaymentModal } from './PretendPayment'
 import { ProductPlate } from './ProductPlate'
 import { ProductPanels } from './Reviews'
@@ -84,6 +85,13 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * and no way forward.
    */
   const [hasConnection, setHasConnection] = useState(false)
+  /** The whole account, not just the line that pays. The brief calls this first-class. */
+  const [positions, setPositions] = useState<Position[]>([])
+  const [cryptoValue, setCryptoValue] = useState<number | null>(null)
+  /** Mesh's per-asset answer on what can actually pay. Null until it has been asked. */
+  const [quotes, setQuotes] = useState<Quote[] | null>(null)
+  /** Which asset the shopper picked. Decides the single destination sent to Mesh. */
+  const [asset, setAsset] = useState<string | null>(null)
 
   const colourway = findColourway(colourwayId)
   /** True when what is on screen is exactly what is already in the bag. */
@@ -139,6 +147,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         }
 
         setFunding({ provider: json.provider, accountName: json.accountName, settlement: json.settlement })
+        setPositions(json.positions ?? [])
+        setCryptoValue(json.cryptoValue ?? null)
         dispatch({
           type: 'holdings:done',
           at: Date.now(),
@@ -146,6 +156,26 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           usdc: json.settlement?.amount ?? null,
           positions: json.positions.length
         })
+
+        // Behind the holdings, not in front of them: five Mesh calls should not stand between the
+        // shopper and the first number on screen.
+        void (async () => {
+          const qStarted = Date.now()
+          try {
+            const qres = await fetch('/api/mesh/quotes')
+            const qjson = await qres.json()
+            note('GET /api/mesh/quotes', 'POST /api/v1/transfers/managed/quote', Date.now() - qStarted, qjson.ok)
+            if (!qjson.ok) return setQuotes([])
+            setQuotes(qjson.quotes)
+            // Default to the first thing that can actually pay, preferring the settlement asset.
+            const best =
+              qjson.quotes.find((q: Quote) => q.eligible && q.primary) ??
+              qjson.quotes.find((q: Quote) => q.eligible)
+            if (best) setAsset(best.symbol)
+          } catch {
+            setQuotes([])
+          }
+        })()
       } catch (err) {
         dispatch({
           type: 'holdings:failed',
@@ -273,11 +303,12 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       void open('pay', {
         colourway: bag.colourway.id,
         size: bag.size,
+        ...(asset ? { asset } : {}),
         // Omitting this restores Mesh's picker, which is exactly what "change account" is for.
         ...(changeAccount || !pickedIntegrationId ? {} : { integrationId: pickedIntegrationId })
       })
     },
-    [open, bag, pickedIntegrationId]
+    [open, bag, pickedIntegrationId, asset]
   )
 
   /** Poll for the webhook. Bounded, because a sandbox that never sends one must not hang. */
@@ -343,7 +374,13 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     setSize(null)
     setDrawer(false)
     setLinkOpen(false)
-    setHasConnection(false)
+    // The account stays connected on purpose, which is what makes a second run fast. Only the
+    // order and what was read for it are cleared.
+    setFunding(null)
+    setPositions([])
+    setCryptoValue(null)
+    setQuotes(null)
+    setAsset(null)
     window.scrollTo({ top: 0 })
   }, [])
 
@@ -383,6 +420,26 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       // Private browsing can refuse. The bag still works for this page view.
     }
   }, [bag])
+
+  /**
+   * A connection survives a reset by design, so on a second run one already exists. Asking once on
+   * load is what lets the checkout offer "connected" instead of walking someone through a
+   * connection they already made.
+   */
+  useEffect(() => {
+    let cancelled = false
+    fetch('/api/mesh/connection')
+      .then(r => r.json())
+      .then(j => {
+        if (cancelled || !j.ok || !j.connection) return
+        setConnection(j.connection)
+        setHasConnection(true)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   /** Fetch the SDK chunk as the shopper reaches checkout, so the pay click does not pay for it. */
   useEffect(() => {
@@ -666,8 +723,17 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                               disabled={busy}
                               className="btn-primary mt-4 w-full py-4 text-sm"
                             >
-                              {busy ? 'Opening…' : `Pay with crypto · ${usd(PRODUCT.price + HANDLING_FEE)}`}
+                              {busy
+                                ? 'Opening…'
+                                : connection
+                                  ? `Continue with ${connection.brokerName}`
+                                  : `Pay with crypto · ${usd(PRODUCT.price + HANDLING_FEE)}`}
                             </button>
+                            {connection && (
+                              <p className="note mt-2">
+                                Already connected, so you will not be asked to sign in again.
+                              </p>
+                            )}
                             <div className="mt-3">
                               <FundingNote />
                             </div>
@@ -696,9 +762,22 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
                     {connected && !order.failure && !linkOpen && (funding || order.warning) && (
                       <>
+                        {funding && positions.length > 0 && (
+                          <Portfolio
+                            provider={funding.provider}
+                            accountName={funding.accountName}
+                            positions={positions}
+                            cryptoValue={cryptoValue}
+                            quotes={quotes}
+                            selected={asset}
+                            onSelect={setAsset}
+                          />
+                        )}
+
                         <FundingSource
                           funding={funding}
                           providerName={connection?.brokerName ?? null}
+                          payingWith={asset}
                           onChangeAccount={() => startPayment(true)}
                         />
                         <button

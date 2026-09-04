@@ -27,6 +27,29 @@ export const HANDLING_FEE = Number.parseFloat(
   process.env.NEXT_PUBLIC_MERCHANT_HANDLING_FEE ?? '0'
 ) || 0
 
+/**
+ * What this merchant accepts, all to the same address on the same network.
+ *
+ * USDC is the required settlement asset and stays the default. The other two are here so the
+ * shopper genuinely has a choice: Mesh's `toAddresses` takes an array, and its own guidance is to
+ * offer every destination you can so a transfer has more ways to succeed.
+ *
+ * Stablecoins only, deliberately. All three sit at roughly a dollar, so a $50 price stays a $50
+ * price whichever one is used. Accepting ETH would mean showing a converted amount that moves
+ * while the shopper reads it, which is a different product decision and not this one.
+ */
+export const ACCEPTED_ASSETS = [
+  { symbol: 'USDC', name: 'USD Coin', primary: true },
+  { symbol: 'USDT', name: 'Tether' },
+  { symbol: 'PYUSD', name: 'PayPal USD' }
+] as const
+
+export type AcceptedSymbol = (typeof ACCEPTED_ASSETS)[number]['symbol']
+
+export function isAccepted(symbol: string | null | undefined): symbol is AcceptedSymbol {
+  return ACCEPTED_ASSETS.some(a => a.symbol === symbol)
+}
+
 export type ColourwayId = 'charcoal' | 'navy' | 'stone' | 'black'
 
 export type Colourway = {

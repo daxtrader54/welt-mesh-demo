@@ -8,7 +8,7 @@ const build = (clientFee?: number) =>
   buildPaymentTokenBody({
     userId: 'welt-abc',
     transactionId: 'WELT-0042',
-    destination: { networkId: ETHEREUM, address: MERCHANT, symbol: 'USDC' },
+    destinations: [{ networkId: ETHEREUM, address: MERCHANT, symbol: 'USDC' }],
     amount: 50,
     displayAmountInFiat: 50,
     clientFee
