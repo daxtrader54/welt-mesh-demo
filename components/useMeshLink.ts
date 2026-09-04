@@ -112,7 +112,14 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
   const open = useCallback(
     async (
       intent: OpenIntent,
-      selection?: { colourway?: string; size?: string; integrationId?: string; asset?: string }
+      selection?: {
+        colourway?: string
+        size?: string
+        integrationId?: string
+        asset?: string
+        /** Open with no stored account attached. Used by "use a different account". */
+        fresh?: boolean
+      }
     ) => {
       if (inFlight.current) return
       inFlight.current = true
@@ -223,5 +230,24 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
     []
   )
 
-  return { open, busy }
+  /**
+   * Shut the session down from outside.
+   *
+   * Needed because some failures are ours to diagnose, not Mesh's. A stale stored token ends on
+   * Mesh's own "Unable to initiate the transfer" screen, whose Try again retries the same broken
+   * session, while our recovery sits behind the iframe where nobody can reach it. Closing puts the
+   * page back in charge with the one action that works.
+   */
+  const close = useCallback(() => {
+    clearWatchdog()
+    latest.current.onVisibilityChange?.(false)
+    try {
+      session.current?.closeLink()
+    } catch {
+      // Already gone.
+    }
+    session.current = null
+  }, [])
+
+  return { open, busy, close }
 }

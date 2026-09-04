@@ -50,6 +50,17 @@ reliable either: **"Please login again to continue."** once and **"An error has 
 next time, for the identical cause. What *is* reliable is whether you passed stored `accessTokens`
 into that session, so use that to decide.
 
+**`accessTokens` wants a populated account, not just a token id.** We sent the token id with empty
+strings for `brokerName`, `accountId` and `accountName`, reasoning that the id was the only field
+that identified anything. Link then failed intermittently about a second after opening, with
+`transferConfigureError` and Mesh's least useful message, "An error has occurred.", on Mesh's own
+"Unable to initiate the transfer" screen. Populate all of them from the connect payload, which means
+capturing `account.accountId` at connect time.
+
+**Do not replay a stored account into a session where the shopper asked for a different one.** Same
+symptom. Link is being handed an account to restore at the exact moment it is being asked to find a
+new one.
+
 **Content-level failures are a general pattern, not a one-off.** `holdings/get` and
 `transfers/managed/configure` both answer HTTP 200 with a `content.status` that is not `succeeded`.
 Check the body, not the status line.

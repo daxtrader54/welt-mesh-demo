@@ -23,6 +23,7 @@ export const dynamic = 'force-dynamic'
 const body = z.object({
   brokerType: z.string().min(1),
   brokerName: z.string().min(1),
+  accountId: z.string().nullable().optional(),
   accountName: z.string().nullable().optional(),
   authToken: z.string().min(1),
   tokenId: z.string().nullable().optional(),
@@ -43,6 +44,7 @@ export async function POST(req: Request) {
       tokenId: input.tokenId ?? null,
       brokerType: input.brokerType,
       brokerName: input.brokerName,
+      accountId: input.accountId ?? null,
       accountName: input.accountName ?? null,
       authToken: input.authToken,
       connectedAt: Date.now(),

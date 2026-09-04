@@ -35,6 +35,15 @@ const body = z.object({
    */
   integrationId: z.uuid().optional(),
   /**
+   * Open Link with no stored account attached.
+   *
+   * Set when the shopper asked for a different account. Replaying the existing token into that
+   * session contradicts what they just clicked, and it is the likeliest cause of the
+   * `transferConfigureError` a second after opening: Link is handed an account to restore at the
+   * moment it is being asked to find a new one.
+   */
+  fresh: z.boolean().optional(),
+  /**
    * Which asset the shopper picked from their holdings. Validated against the merchant's accepted
    * list, never trusted as a free string: it decides what the destination address receives.
    */
@@ -68,14 +77,22 @@ export async function POST(req: Request) {
      * which is exactly the case a repeat demo hits.
      */
     const session = await getSession(sid)
-    const accessTokens = (session?.connections ?? [])
+    const accessTokens = (parsed.data.fresh ? [] : (session?.connections ?? []))
       .filter(c => c.tokenId)
+      /**
+       * Populated, not blank. This used to send the token id with three empty strings for
+       * brokerName, accountId and accountName, on the reasoning that the id was the only field
+       * that mattered. Link then failed intermittently a second after opening, with
+       * `transferConfigureError` and Mesh's least useful message, "An error has occurred." Handing
+       * a restore path an account with no name and no id is asking it to reconstitute something
+       * from a bare token, so give it what the connect payload gave us.
+       */
       .map(c => ({
         accessToken: c.tokenId!,
         brokerType: c.brokerType,
-        brokerName: '',
-        accountId: '',
-        accountName: ''
+        brokerName: c.brokerName,
+        accountId: c.accountId ?? '',
+        accountName: c.accountName ?? ''
       }))
 
     if (parsed.data.intent === 'connect') {
