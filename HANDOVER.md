@@ -1,132 +1,118 @@
 # Where this is up to
 
-Written 4 September 2026, updated the same day. Delete this file before the work is submitted.
+Written 4 September 2026. Delete this file before the work is submitted.
 
 Everything is committed and pushed to `daxtrader54/welt-mesh-demo`, deployed at
-https://welt-mesh-demo.vercel.app. Working tree clean. 91 tests pass, typecheck and build are clean.
+https://welt-mesh-demo.vercel.app. Working tree clean. 115 tests pass, typecheck and build are clean.
 
 The README is the real documentation: what it does, how it is put together, and a Decisions and
-tradeoffs section covering every fork worth explaining. This file is only the to-do list.
+tradeoffs section covering every fork worth explaining. `MESH-NOTES.md` is the integration log.
+This file is only the to-do list.
 
 ---
 
-## Settled since this file was written
+## The adversarial review, and what came out of it
 
-**The webhook secret is set and settlement works.** Live `/api/health` reports `webhookSecret: true`
-and `storage: redis`. `scripts/webhook-check.mjs` passes 5/5 against production, and several real
-payments have settled on a verified delivery. Sandbox delivery is intermittent though: some runs
-settle in seconds, some never arrive. The receipt is complete at `paid` by design.
+Ten independent reviewers went at the running app, the live deployment, the source, the Mesh SDK
+source and Mesh's own documentation: solutions architect, visual design, UX, destructive QA, CTO,
+security, Mesh DevRel, documentation, deployment and accessibility. Five blockers, twelve highs.
+Four of the five blockers are fixed and each was verified rather than reasoned about.
 
-**The audit is done.** `AUDIT.md`, gitignored alongside the brief. Every hard requirement in the
-brief is met, verified against a real settled run: $50, USDC, Coinbase, `0x0Ff0…0f0`, Ethereum,
-Link UI, MFA, webhook.
+**Fixed, with the evidence that proved it:**
 
-**The integration log is written.** `MESH-NOTES.md`, committed and linked from the README. Every
-restriction and wrong turn, tagged measured, documented, or unknown.
+- **The Link close recursion.** `closeLink()` in SDK 3.12.0 ends by calling `onExit`, and our
+  `onExit` called `closeLink()` while leaving the session handle populated, so it called itself
+  4,189 frames deep and the `RangeError` went into a bare `catch`. Every frame after the first
+  re-entered with no arguments, so the real exit page was overwritten by a generic message
+  thousands of times. Taking the handle and nulling the reference first gives it a base case:
+  measured at depth 2, one app-level exit, carrying the page the shopper actually left from.
+  **Mesh's own `llms-full.txt` causes this**, and that is worth saying out loud in a walkthrough
+  rather than hiding.
+- **A `null` in a webhook body lost the settlement for good.** Fifteen fields used `.optional()`
+  where the rest of the file uses `.nullish()` 85 times and explains why in its header. Verified
+  live: `"TxHash": null` went from 400 to 200.
+- **A second delivery un-settled a settled order.** Reproduced on a real order, then fixed and
+  re-verified: Succeeded settles, a later Pending leaves it settled, a RefundPending leaves it
+  settled. All three used to knock it back to `created`.
+- **The conversion claim.** Corrected in the README and in the shopper-facing copy. See the open
+  question below.
 
-**23 commits on 4 September**, all pushed and deployed. The big ones:
+**Not fixed, and both are decisions rather than work:**
 
-- The expired-connection dead end, in three parts: a refused token arrives in two unrelated shapes,
-  the same fault reaches the SDK with an unreliable message, and the recovery was hidden behind
-  Mesh's own error screen.
-- **The root cause of "Unable to initiate the transfer"**: we replayed a stored account into connect
-  sessions, whose entire purpose is to find one. Fixed by never sending `accessTokens` on connect.
-- The quote endpoint had never worked in sandbox. It wants production broker types, and its
-  response fields were being read under invented names.
-- `transfers/managed/configure` added, which is the only call that answers about the account.
-- Checkout and confirmation both rebuilt: centred column, itemised, classic confirmation.
-- Metadata, noindex three ways, documentation drift.
+- **The brief is still in the public git history.** `initial-spec.md`, `appendix.md` and
+  `additional-context.md` went in with the first commit `4260894` and came out in `4403752`. Both
+  are ancestors of `main`, so all three are still fetchable, unauthenticated, from
+  `raw.githubusercontent.com`. `AUDIT.md` was never committed and is clean. Fixing it means
+  `git filter-repo --invert-paths` on those three paths and a force push, which also rewrites the
+  five commits below, so it is cheaper to do sooner than later.
+- **`HANDOVER.md` is this file**, it is committed, and its second line tells you to delete it.
+
+**Still on the list, none of it blocking:** the cookieless rate-limit bypass on `link-token`, no
+timeout on the providers route, no `maxDuration` on any route, untyped route payloads duplicated
+across four components, and no tests above `lib/`.
+
+---
+
+## The five commits since the last update
+
+- `7f03150` the review fixes: settlement path, Link recursion, demo reliability, presenting layout,
+  accessibility, and the documentation that blamed Mesh for our own webhook registration gap.
+- `9750a20` the listing given a shop's shape on a phone, and stock made per colourway.
+- `9d7a945` cards at half a row each, corner numbering removed.
+- `ed9279e` the checkout quietened down to the decision it is asking for.
+- `2621dbd` the drawer scroll bug and the floating specification.
+
+---
 
 ## Outstanding
 
-**The exercise files stay unpublished.** `initial-spec.md`, `appendix.md`,
-`additional-context.md` and `AUDIT.md` are in the working directory and gitignored, because
-the repo is public and publishing a company's take-home hands it to every future candidate.
-`PLAN.md` is the record of what was agreed, with a header naming where the build diverged from it.
+**A real phone.** Still the honest gap. Everything below has been exercised in a desktop browser at
+phone widths and never on a handset:
 
-**A real phone.** Everything below has been exercised on a desktop browser many times over and
-never on a handset:
-
-- the console bar, the added-to-bag sheet and the pretend payment sheet clearing iOS Safari's own
-  toolbar
-- the payment trace collapsing to a count on a narrow screen
 - Mesh Link rendering as an overlay rather than embedded below 1024px, which is the thing most
-  likely to be wrong
+  likely to be wrong and the one part of the journey this repo does not own
+- the console bar, the added-to-bag sheet and the pretend payment sheet clearing iOS Safari's toolbar
+- the sandbox credentials strip, which now renders over Mesh's own overlay at z-index 10001
+- the panel drawer scrolling, which was genuinely broken until `2621dbd` and is fixed by reasoning
+  about the flex chain rather than by touching it
 
-**The `MeshBTC` run.** See the open question at the bottom. One connect and one payment settles
-whether the headline capability can be demonstrated at all.
+**The `MeshBTC` run.** See the open question. One connect and one payment settles whether the
+headline capability can be demonstrated at all.
 
 **Onramp flow.** Offered, never decided on. `transferType: 'onramp'` would let a shopper holding no
-crypto at all pay by card through their exchange. It is the one obvious Mesh capability this build
-does not show.
-
----
-
-## What the last few sessions did
-
-**Documentation and repo review.** README rewritten from scratch against the code: the old one had
-drifted in eight verifiable places, including a Node floor that fails `npm test` and a claim there
-was no architecture diagram directly above one. Added the Decisions and tradeoffs section, a
-LICENSE (MIT for the code, product photographs and Mesh's marks carved out) and repo topics. Fixed
-the same drift in the in-app panel, and put the webhook secret status on the Demo tab so a missing
-secret is visible from the app rather than only from curl.
-
-**Six fixes from testing**, in the order they hurt:
-
-1. A returning shopper hit "Reading your account" and stayed there. The portfolio was only ever
-   read from the SDK's connect callback, which never fires for someone whose connection survived
-   the reset. Same root cause: holding a token and having chosen how to pay were one flag, so a
-   returning shopper also lost the card and Apple Pay options. Both fixed, plus a 20 second abort
-   so a hung request cannot recreate the spinner.
-2. The confirmation said $50.00 and the receipt said $50.01 on the same screen. `chargedTotal` in
-   `lib/order/state.ts` is now the single answer.
-3. A non-crypto tester could not tell which entry in Mesh's catalogue was theirs. The checkout now
-   names a provider and deep-links to it, catalogue one click away. That surfaced a second thing:
-   alphabetical sorting put Binance first, because the sandbox Binance entry is typed `sandbox` and
-   named "Binance", so an accident of the catalogue was choosing the default.
-4. Added a delivery step. Never leaves the browser.
-5. `viewport-fit=cover` and safe-area insets, because the console bar and both bottom sheets were
-   sitting under iOS Safari's own toolbar.
-6. The payment trace collapses to a count on a narrow screen.
+crypto pay by card through their exchange. The one obvious Mesh capability this build does not show.
 
 ---
 
 ## Facts worth not rediscovering
 
-- Sandbox accounts: `Mesh`, `Mesh2` (empty), `Mesh3` (cash only), `Mesh4` (large). Password
-  `Pass123`, code `123456`. In the panel's Demo tab.
+- Sandbox accounts: `Mesh`, `Mesh2` (empty), `Mesh3` (cash only), `Mesh4` (large), `MeshBTC` (BTC,
+  no stablecoin). Password `Pass123`, code `123456`. In the panel's Demo tab.
 - The sandbox balance is shared with every other Mesh sandbox user and each run spends about $50.
-- Preview deployments will not work. Mesh validates the Link origin and every commit gets a new
-  URL, so demo from the production domain.
-- `docs.meshconnect.com` is still canonical and `docs.meshpay.com` does not resolve, which is why
-  the docs links and API hosts still say meshconnect while the marketing site is meshpay.
+- Preview deployments will not work. Mesh validates the Link origin and every commit gets a new URL,
+  so demo from the production domain.
+- **Vercel has been queuing badly.** Deploys in this session took fifteen seconds, then five
+  minutes, then eight, then eleven. Nothing wrong with the builds. If you push before a demo, check
+  the page actually contains your change; a 200 means the site is up, not that it is your build.
+- When checking a deploy from a terminal, `grep -c` on served HTML counts matching **lines**, and
+  the document is one line. Use `grep -o ... | wc -l`.
+- `docs.meshconnect.com` is still canonical and `docs.meshpay.com` does not resolve.
 - A stale global TypeScript 4.8 on PATH breaks `npx tsc --noEmit`. Use `npm run typecheck`.
 
 ---
 
-## Where it stands
-
-Working tree clean, everything pushed and live. 91 tests, typecheck and build clean.
-
-Since the last update, all committed and deployed:
-
-- **The root cause of "Unable to initiate the transfer"**: we replayed a stored account into connect
-  sessions, whose whole purpose is to find one. Never sent on connect now.
-- **A History page** in the shop header, reading Mesh's own ledger, with the webhook delivery log
-  per transfer. That is what showed 9 of 25 settlements were never attempted by Mesh at all.
-- **`transfers/managed/configure`** wired in, which is the only call that answers about the account
-  rather than the broker.
-- The confirmation and the listing both rebuilt classic, the drawn logo trimmed and used, the
-  address editable from the bag and clearable from the panel.
-
 ## Known, not fixed
 
-- Three dead exports left over from the change that made reset keep the connection:
-  `clearSession` in `lib/store/records.ts`, `clearSessionCookie` in `lib/session.ts`, and
-  `colourwayFor` in `lib/product.ts`. None are referenced anywhere.
-- `SettlementRecord.transferId` is written by the webhook and never read.
-- `components/Shop.tsx` is past 1,100 lines. Named in the audit, deliberately not touched before a
-  demo.
+- Three dead exports left over from the change that made reset keep the connection: `clearSession`
+  in `lib/store/records.ts`, `clearSessionCookie` in `lib/session.ts`, and `colourwayFor` in
+  `lib/product.ts`. None are referenced anywhere.
+- `components/Shop.tsx` is past 1,500 lines. Named in the audit; the CTO reviewer looked at it
+  specifically and said **do not decompose it before a demo**, because the genuinely hard state is
+  already out of it in a tested pure reducer. The one extraction worth making is the Mesh
+  orchestration into a `useCheckout` hook, because that is what a Mesh engineer opens the repo to
+  read and it currently sits behind a product page.
+
+---
 
 ## The open question
 
@@ -134,10 +120,15 @@ Since the last update, all committed and deployed:
 field for the funding asset, so it cannot be offered. Mesh decides, spending the collected asset
 when the balance covers it and converting another holding when it does not.
 
-Which means an account holding plenty of USDC will never show conversion. Connect **`MeshBTC`**
-(BTC, no stablecoin) and watch the panel's Integration tab: if USDC comes back
+Which means an account holding plenty of USDC will never show conversion. **And it has never
+happened here.** Every transfer on this client shows a same-asset funding leg; asked directly about
+BTC against a $50 USDC-on-Ethereum destination, `configure` did not return it as eligible with
+funding. The README and the portfolio copy now say only what has been measured, so this is no longer
+a blocker, but it is still the headline.
+
+Connect **`MeshBTC`** and watch the panel's Integration tab: if USDC comes back
 `eligible with funding`, Mesh converts the BTC and the receipt names it. That single run either
-proves the headline capability or shows it is not enabled for this sandbox client.
+proves the capability or confirms it is not enabled for this sandbox client.
 
 Also untested, and quick: whether the `Pay with` row on Mesh's own payment sheet is tappable. If it
 is, that is where a shopper's choice actually lives.

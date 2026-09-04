@@ -10,8 +10,14 @@ export const dynamic = 'force-dynamic'
  *
  * This used to delete the session record and the cookie, which destroyed the stored token ids and
  * minted a new Mesh userId on the next request, so every run paid for a full Coinbase sign-in
- * while three places on screen promised it would not. Now it clears the order and leaves the
- * connection alone, which is what the copy said all along and what makes a second run fast.
+ * while three places on screen promised it would not. It now leaves the connection alone, which is
+ * what the copy said all along and what makes a second run fast.
+ *
+ * What it does not do, despite a previous version of this comment and the README both saying so,
+ * is clear the order. The order was never in the session record: it lives under its own key and
+ * the browser holds the id. The browser dropping that id is the reset, and this call confirms the
+ * connection survived and refreshes the session TTL while it is at it. Deleting the order key too
+ * would need the id sent up, and would buy nothing: it is already unreachable and expires in a day.
  *
  * It still never calls Mesh's remove-connection endpoint. That permanently revokes a tokenId with
  * no way back, which is the wrong thing for a reset button to do.
