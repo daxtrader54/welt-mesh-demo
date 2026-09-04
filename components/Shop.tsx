@@ -127,7 +127,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const [fundingStatus, setFundingStatus] = useState<{
     status: string | null
     error: string | null
-    assets: number | null
+    assets: AssetFunding[] | null
   }>({ status: null, error: null, assets: null })
   /** Which asset the shopper picked. Decides the single destination sent to Mesh. */
   const [asset, setAsset] = useState<string | null>(null)
@@ -282,7 +282,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           setFundingStatus({
             status: qjson.fundingStatus ?? null,
             error: qjson.fundingError ?? null,
-            assets: qjson.funding?.length ?? null
+            assets: qjson.funding ?? null
           })
           // Default to the first thing that can actually pay, preferring the settlement asset.
           const best =
