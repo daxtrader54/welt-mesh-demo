@@ -43,7 +43,7 @@ import { LINK_FRAME_ID, useMeshLink } from './useMeshLink'
 
 type Step = 'shop' | 'product' | 'bag' | 'checkout' | 'done'
 
-export function Shop({ demoMode }: { demoMode: boolean }) {
+export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
   const [step, setStep] = useState<Step>('shop')
   const [colourwayId, setColourwayId] = useState<ColourwayId>(DEFAULT_COLOURWAY)
   const [plate, setPlate] = useState<PlateId>('lateral')
@@ -65,6 +65,9 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
   const [pickedIntegrationId, setPickedIntegrationId] = useState<string | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [calls, setCalls] = useState<ServerCall[]>([])
+  // The technical panel is the point of the build, so it is open by default on a wide screen and
+  // collapses to the console bar. ?demo=0 starts it closed for a pure-shop view.
+  const [panelOpen, setPanelOpen] = useState(!closedByDefault)
   const [drawer, setDrawer] = useState(false)
   /** True while Mesh Link is on screen, so the checkout makes room for it. */
   const [linkOpen, setLinkOpen] = useState(false)
@@ -332,6 +335,7 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'd' && (e.metaKey || e.ctrlKey) && e.shiftKey) {
         e.preventDefault()
+        setPanelOpen(v => !v)
         setDrawer(v => !v)
       }
     }
@@ -715,11 +719,31 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
         onUseCrypto={startConnect}
       />
 
-      {!demoMode && <ConsoleBar order={order} open={drawer} onToggle={() => setDrawer(v => !v)} />}
+      {/* Always mounted. On a wide screen it hides while the docked panel is open; on a narrow one
+          it is the only way in, because a 26rem panel does not belong on a phone. */}
+      <ConsoleBar
+        order={order}
+        open={panelOpen || drawer}
+        className={panelOpen ? 'lg:hidden' : undefined}
+        onToggle={() => {
+          setPanelOpen(v => !v)
+          setDrawer(v => !v)
+        }}
+      />
 
+      {/* Docked on desktop, overlay on mobile. CSS picks, so there is no media query in JS. */}
       <TechnicalView
-        open={drawer || demoMode}
-        docked={demoMode}
+        open={panelOpen}
+        docked
+        onClose={() => setPanelOpen(false)}
+        order={order}
+        calls={calls}
+        connection={connection}
+        onReset={reset}
+      />
+      <TechnicalView
+        open={drawer}
+        docked={false}
         onClose={() => setDrawer(false)}
         order={order}
         calls={calls}

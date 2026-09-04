@@ -74,11 +74,13 @@ const ROUTES: { route: string; does: string; mesh: string | null }[] = [
 export function ConsoleBar({
   order,
   open,
-  onToggle
+  onToggle,
+  className = ''
 }: {
   order: OrderState
   open: boolean
   onToggle: () => void
+  className?: string
 }) {
   // A short trail, newest last, so the bar visibly moves as events land rather than swapping one
   // word. Three is enough to read at a glance while a payment is running.
@@ -89,7 +91,7 @@ export function ConsoleBar({
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-5 border-t border-rule bg-plate px-16 py-2.5 transition-colors hover:bg-ground"
+      className={`fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-5 border-t border-rule bg-plate px-16 py-2.5 transition-colors hover:bg-ground ${className}`}
     >
       <span className="flex shrink-0 items-center gap-2">
         <span
@@ -250,11 +252,9 @@ export function TechnicalView({
     <div className="flex h-full flex-col bg-ground">
       <div className="rule-b flex items-center justify-between px-5 py-3">
         <span className="label">Behind the payment</span>
-        {!docked && (
-          <button type="button" onClick={onClose} className="btn-quiet border-0">
-            Close
-          </button>
-        )}
+        <button type="button" onClick={onClose} className="btn-quiet border-0">
+          {docked ? 'Collapse' : 'Close'}
+        </button>
       </div>
 
       <nav className="rule-b flex gap-4 px-5">
@@ -481,11 +481,15 @@ export function TechnicalView({
   )
 
   if (docked) {
-    return <aside className="hidden h-screen w-[26rem] shrink-0 border-l border-rule lg:block">{body}</aside>
+    return (
+      <aside className="sticky top-0 hidden h-screen w-[26rem] shrink-0 border-l border-rule lg:block">
+        {body}
+      </aside>
+    )
   }
 
   return (
-    <>
+    <div className="lg:hidden">
       <div className="fixed inset-0 z-40 bg-ink/20" onClick={onClose} aria-hidden />
       <aside
         className="fixed inset-y-0 right-0 z-50 w-full max-w-lg border-l border-rule shadow-2xl"
@@ -494,6 +498,6 @@ export function TechnicalView({
       >
         {body}
       </aside>
-    </>
+    </div>
   )
 }
