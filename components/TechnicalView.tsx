@@ -512,7 +512,18 @@ export function TechnicalView({
                 ['Mesh', 'Full portfolio. The happy path.'],
                 ['Mesh2', 'Empty. Produces a genuine no eligible assets.'],
                 ['Mesh3', 'Cash only.'],
-                ['Mesh4', 'Large balance.']
+                ['Mesh4', 'Large balance.'],
+                /**
+                 * The single-asset accounts are the ones worth knowing about. `Mesh` holds plenty
+                 * of USDC, so Mesh has no reason to convert anything and the most interesting
+                 * capability never fires. `MeshBTC` holds BTC and no stablecoin at all, which is
+                 * the only way to see whether a $50 order settled in USDC can be paid out of an
+                 * asset that is not USDC.
+                 */
+                ['MeshBTC', 'BTC only. The conversion test: no stablecoin to fall back on.'],
+                ['MeshETH', 'ETH only.'],
+                ['MeshSOL', 'SOL only.'],
+                ['MeshUSDC', 'USDC only.']
               ].map(([user, note]) => (
                 <li key={user} className="rule-b flex items-baseline justify-between gap-3 py-2">
                   <span className="data text-sm">{user}</span>

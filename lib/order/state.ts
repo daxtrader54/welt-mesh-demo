@@ -63,6 +63,23 @@ export type PaymentDetail = {
   previewId: string | null
 }
 
+/**
+ * One leg of how Mesh actually funded the payment.
+ *
+ * This is the thing the whole integration argues for, and until now the app threw it away.
+ * `transferPreviewed` carries `cryptocurrencyFundingOptions`, and when the type is one of the
+ * conversion values the shopper paid with an asset the merchant never asked for and never had to
+ * think about. A shopper holding only BTC buying a $50 pair of trainers settled in USDC is the
+ * demonstration; a receipt that does not mention it has hidden the point.
+ */
+export type FundingLeg = {
+  type: string
+  symbol: string | null
+  amountInCrypto: number | null
+  amountInFiat: number | null
+  feeInFiat: number | null
+}
+
 export type FeeDetail = {
   institution: number | null
   institutionCurrency: string | null
@@ -82,6 +99,8 @@ export type OrderState = {
   selectedProvider: string | null
   payment: PaymentDetail
   fees: FeeDetail
+  /** How Mesh funded it, from the preview. Empty until Mesh says, and often one plain leg. */
+  funding: FundingLeg[]
   failure: Failure | null
   /**
    * A problem that does not stop the payment. A failed balance read belongs here: the shopper can
@@ -125,6 +144,7 @@ export function initialOrderState(): OrderState {
       previewId: null
     },
     fees: { institution: null, institutionCurrency: null, gas: null, client: null },
+    funding: [],
     failure: null,
     warning: null,
     log: []
@@ -288,6 +308,25 @@ function redactPayload(event: LinkEventType): unknown {
   }
 }
 
+/**
+ * Mesh's funding option types in plain English. Four of the seven are conversion, which is the
+ * capability that lets someone pay for a dollar-priced order out of an asset that is not dollars.
+ */
+const FUNDING_TYPES: Record<string, string> = {
+  existingCryptocurrencyBalance: 'balance in',
+  buyingPowerPurchase: 'buying power, bought as',
+  paymentMethodDepositUsage: 'a payment method, deposited as',
+  cryptocurrencyConversion: 'converting',
+  stableCoinNoFeeConversion: 'converting, no fee,',
+  cryptocurrencyBuyingPowerConversion: 'converting buying power from',
+  cryptocurrencyMultiStepConversion: 'converting, in steps, from'
+}
+
+export function describeFundingType(type: string | null | undefined): string {
+  if (!type) return 'an unnamed source'
+  return FUNDING_TYPES[type] ?? type
+}
+
 function applyLinkEvent(
   state: OrderState,
   event: LinkEventType,
@@ -364,6 +403,13 @@ function applyLinkEvent(
           gas: p.estimatedNetworkGasFee?.fee ?? null,
           client: p.customClientFee?.fee ?? null
         },
+        funding: (p.cryptocurrencyFundingOptions ?? []).map(f => ({
+          type: f.cryptocurrencyFundingOptionType ?? 'unknown',
+          symbol: f.cryptocurrencySymbol ?? null,
+          amountInCrypto: f.usedAmountInCryptocurrency ?? null,
+          amountInFiat: f.usedAmountInFiat ?? null,
+          feeInFiat: f.fee?.amountInFiat ?? null
+        })),
         // Asset and network do not always fire their own events when Link picks them for you.
         // `at: 0` keeps an existing timestamp. Mesh re-quotes every ~30s while the shopper sits on
         // the confirm screen, and without this the asset and network rows creep forward on each
@@ -400,6 +446,25 @@ function applyLinkEvent(
                   }
                 ]
               : []),
+            /**
+             * Named on the manifest, because a conversion is the most interesting thing that can
+             * happen here and it would otherwise be invisible: the shopper spends BTC, the
+             * merchant is paid USDC, and nothing on screen says so.
+             */
+            ...(p.cryptocurrencyFundingOptions?.length
+              ? [
+                  {
+                    label: 'Funded by',
+                    value: p.cryptocurrencyFundingOptions
+                      .map(f =>
+                        f.cryptocurrencySymbol
+                          ? `${describeFundingType(f.cryptocurrencyFundingOptionType)} ${f.cryptocurrencySymbol}`
+                          : describeFundingType(f.cryptocurrencyFundingOptionType)
+                      )
+                      .join(', then ')
+                  }
+                ]
+              : []),
             { label: 'Preview', value: p.previewId, technical: true }
           ]
         )
@@ -432,6 +497,23 @@ function applyLinkEvent(
           { label: 'Transaction', value: event.payload.txId, technical: true }
         ])
       }
+
+    /**
+     * One funding leg running. Mesh emits this per leg, so a conversion that fails part way
+     * through says which leg and why rather than surfacing as a bare execution error.
+     */
+    case 'executeFundingStep': {
+      const p = event.payload
+      if (p.status !== 'failed' && p.status !== 'error') return next
+      return {
+        ...next,
+        status: 'failed',
+        failure: failure('execution_failed', {
+          title: `The ${describeFundingType(p.cryptocurrencyFundingOptionType).replace(/,$/, '')} step did not complete`,
+          detail: p.errorMessage || `Funding step ${p.cryptocurrencyFundingOptionType}: ${p.status}`
+        })
+      }
+    }
 
     /** A wallet that timed out or connected the wrong address. Otherwise this is silent. */
     case 'defiWalletError':
