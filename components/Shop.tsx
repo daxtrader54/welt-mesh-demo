@@ -25,7 +25,13 @@ import { ProductPlate } from './ProductPlate'
 import { ProductPanels } from './Reviews'
 import { ShopFront } from './ShopFront'
 import { Receipt } from './Receipt'
-import { ConsoleBar, TechnicalView, type ConnectionSummary, type ServerCall } from './TechnicalView'
+import {
+  ConsoleBar,
+  PanelHandle,
+  TechnicalView,
+  type ConnectionSummary,
+  type ServerCall
+} from './TechnicalView'
 import { LINK_FRAME_ID, preloadMeshLink, useMeshLink } from './useMeshLink'
 
 /**
@@ -43,7 +49,7 @@ import { LINK_FRAME_ID, preloadMeshLink, useMeshLink } from './useMeshLink'
 
 type Step = 'shop' | 'product' | 'bag' | 'checkout' | 'done'
 
-export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
+export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const [step, setStep] = useState<Step>('shop')
   const [colourwayId, setColourwayId] = useState<ColourwayId>(DEFAULT_COLOURWAY)
   const [plate, setPlate] = useState<PlateId>('lateral')
@@ -65,9 +71,9 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
   const [pickedIntegrationId, setPickedIntegrationId] = useState<string | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
   const [calls, setCalls] = useState<ServerCall[]>([])
-  // The technical panel is the point of the build, so it is open by default on a wide screen and
-  // collapses to the console bar. ?demo=0 starts it closed for a pure-shop view.
-  const [panelOpen, setPanelOpen] = useState(!closedByDefault)
+  // Collapsed to start: the shop should get to be a shop before the demo announces itself.
+  // ?demo=1 opens it docked for presenting.
+  const [panelOpen, setPanelOpen] = useState(panelOpenByDefault)
   const [drawer, setDrawer] = useState(false)
   /** True while Mesh Link is on screen, so the checkout makes room for it. */
   const [linkOpen, setLinkOpen] = useState(false)
@@ -827,6 +833,10 @@ export function Shop({ closedByDefault }: { closedByDefault: boolean }) {
           setDrawer(v => !v)
         }}
       />
+
+      {/* The collapse handle, sitting on the rule the panel opens along. Desktop only: on a phone
+          the bar along the bottom is the way in and out. */}
+      <PanelHandle open={panelOpen} onToggle={() => setPanelOpen(v => !v)} />
 
       {/* Docked on desktop, overlay on mobile. CSS picks, so there is no media query in JS. */}
       <TechnicalView

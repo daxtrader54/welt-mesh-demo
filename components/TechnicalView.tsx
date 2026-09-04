@@ -65,6 +65,30 @@ const ROUTES: { route: string; does: string; mesh: string | null }[] = [
 ]
 
 /**
+ * The handle that opens and closes the panel, sitting on the rule the panel opens along.
+ *
+ * Half on the page and half on the panel, so it reads as the seam between them rather than as
+ * another control floating on the shop. The arrow points the way the panel will move.
+ */
+export function PanelHandle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-label={open ? 'Collapse the technical panel' : 'Open the technical panel'}
+      title={open ? 'Collapse' : 'Behind the payment'}
+      className="fixed top-1/2 z-40 hidden h-9 w-9 -translate-y-1/2 place-items-center rounded-full border border-rule-strong bg-plate text-ink shadow-sm transition-[right,border-color] duration-200 hover:border-ink lg:grid"
+      style={{ right: open ? 'calc(26rem - 1.125rem)' : '0.75rem' }}
+    >
+      <span className="data text-sm leading-none" aria-hidden>
+        {open ? '›' : '‹'}
+      </span>
+    </button>
+  )
+}
+
+/**
  * The console bar.
  *
  * A rotated edge tab was the first attempt and it collapsed into an unreadable blob, which is a
@@ -95,7 +119,7 @@ export function ConsoleBar({
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      className={`fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-5 border-t border-rule bg-plate px-16 py-2.5 transition-colors hover:bg-ground ${className}`}
+      className={`group fixed inset-x-0 bottom-0 z-30 flex items-center justify-center gap-4 border-t-2 border-ink bg-plate px-4 py-2 transition-colors hover:bg-ground sm:gap-5 sm:px-16 ${className}`}
     >
       <span className="flex shrink-0 items-center gap-2">
         <span
@@ -105,7 +129,7 @@ export function ConsoleBar({
           }}
           aria-hidden
         />
-        <span className="label">Behind the payment</span>
+        <span className="label text-ink">Behind the payment</span>
       </span>
 
       <span className="hidden min-w-0 items-baseline gap-4 sm:flex">
@@ -120,7 +144,7 @@ export function ConsoleBar({
             </span>
           ))
         ) : (
-          <span className="note whitespace-nowrap">
+          <span className="note whitespace-nowrap text-ink">
             Live Mesh events, the routes behind them, and the sandbox accounts.
           </span>
         )}
@@ -128,9 +152,17 @@ export function ConsoleBar({
 
       <span className="flex shrink-0 items-center gap-3">
         {order.log.length > 0 && (
-          <span className="data text-xs text-muted">{order.log.length} events</span>
+          <span className="data hidden text-xs text-muted sm:inline">
+            {order.log.length} events
+          </span>
         )}
-        <span className="label">{open ? 'Close' : 'Open'}</span>
+        {/* The one accent on this bar, so it reads as the thing to press rather than a caption. */}
+        <span
+          className="data px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.08em] transition-transform group-hover:translate-x-0.5"
+          style={{ background: 'var(--color-accent)', color: 'var(--color-ink)' }}
+        >
+          {open ? 'Close' : 'Open'} →
+        </span>
       </span>
     </button>
   )
@@ -494,10 +526,13 @@ export function TechnicalView({
 
   return (
     <div className="lg:hidden">
-      <div className="fixed inset-0 z-40 bg-ink/20" onClick={onClose} aria-hidden />
+      <div className="fixed inset-0 z-40 bg-ink/30" onClick={onClose} aria-hidden />
+      {/* A sheet, not a takeover. Full height on a phone meant the shop disappeared behind the
+          panel and there was no way to see what the events were about. */}
       <aside
-        className="fixed inset-y-0 right-0 z-50 w-full max-w-lg border-l border-rule shadow-2xl"
+        className="fixed inset-x-0 bottom-0 z-50 flex max-h-[72vh] flex-col border-t-2 border-ink shadow-2xl sm:inset-y-0 sm:left-auto sm:right-0 sm:max-h-none sm:w-full sm:max-w-md sm:border-l sm:border-t-0 sm:border-rule"
         role="dialog"
+        aria-modal="true"
         aria-label="Behind the payment"
       >
         {body}

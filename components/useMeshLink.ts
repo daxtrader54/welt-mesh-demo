@@ -21,11 +21,16 @@ import { failure, type Failure } from '@/lib/failure'
  *  - The SDK is imported dynamically, inside the click. It touches `window` at module scope, so
  *    a static import crashes the server render of this component. Loading it on demand also
  *    keeps it out of the initial bundle, which the shop does not need to display a shoe.
- *  - Rendered embedded rather than as an overlay. Link goes into an iframe the page owns, inside
- *    the checkout column, so paying happens in the shop instead of on top of it. The iframe has
- *    to exist in the DOM before `openLink` runs, which is why the container is always mounted and
- *    collapsed rather than conditionally rendered.
+ *  - Rendered embedded on a wide screen, so paying happens inside the checkout column rather than
+ *    on top of the shop. The iframe has to exist in the DOM before `openLink` runs, which is why
+ *    the container is always mounted and collapsed rather than conditionally rendered.
+ *  - Rendered as an overlay on a narrow one. Link's own layout needs more width than a phone's
+ *    checkout column gives it: embedded on a 375px viewport loaded, fired `pageLoaded`, and then
+ *    showed a white frame. Overlay is Mesh's default and is the right shape for a phone.
  */
+
+/** Below this, Link gets the full screen instead of a column it does not fit in. */
+const EMBED_MIN_WIDTH = 1024
 
 export type OpenIntent = 'connect' | 'pay'
 
@@ -126,14 +131,17 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
 
         const { createLink } = await import('@meshconnect/web-link-sdk')
 
-        latest.current.onVisibilityChange?.(true)
-
         /**
          * If the origin is not registered in Mesh's Allowed Link URLs, or the network blocks
          * *.meshconnect.com, the SDK emits nothing at all: no event, no exit, no console error,
          * just a blank frame forever. It is the most common first-run failure and the only one in
          * this app that produced complete silence.
          */
+        const embed =
+          typeof window !== 'undefined' &&
+          window.matchMedia(`(min-width: ${EMBED_MIN_WIDTH}px)`).matches
+        latest.current.onVisibilityChange?.(embed)
+
         clearWatchdog()
         watchdog.current = setTimeout(() => {
           latest.current.onVisibilityChange?.(false)
@@ -146,7 +154,7 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
         }, LOAD_TIMEOUT_MS)
 
         const link = createLink({
-          renderType: 'embedded',
+          renderType: embed ? 'embedded' : 'overlay',
           theme: 'light',
           language: 'system',
           displayFiatCurrency: 'USD',
@@ -186,7 +194,7 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
         })
 
         session.current = link
-        link.openLink(json.linkToken, LINK_FRAME_ID)
+        link.openLink(json.linkToken, embed ? LINK_FRAME_ID : undefined)
       } catch (err) {
         latest.current.onVisibilityChange?.(false)
         latest.current.onFailure(
