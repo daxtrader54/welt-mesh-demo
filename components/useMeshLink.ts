@@ -59,8 +59,17 @@ export type MeshLinkHandlers = {
   onTransferFinished: (payload: TransferFinishedPayload) => void
   onExit: (error: string | undefined, summary: SessionSummary | undefined) => void
   onFailure: (error: Failure) => void
-  /** Fired once the token is in hand, before Link opens. */
-  onOpening?: (info: { intent: OpenIntent; orderId?: string; reference?: string; ms: number }) => void
+  /**
+   * Fired once the token is in hand, before Link opens. `reusedTokens` says whether this session
+   * was handed a stored Mesh token id, which is what makes a generic Link failure diagnosable.
+   */
+  onOpening?: (info: {
+    intent: OpenIntent
+    orderId?: string
+    reference?: string
+    ms: number
+    reusedTokens: boolean
+  }) => void
   /** Whether Link is on screen right now, so the page can make room for it. */
   onVisibilityChange?: (visible: boolean) => void
 }
@@ -131,7 +140,8 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
           intent,
           orderId: json.order?.id,
           reference: json.order?.reference,
-          ms: json.ms
+          ms: json.ms,
+          reusedTokens: Boolean(json.accessTokens?.length)
         })
 
         const { createLink } = await import('@meshconnect/web-link-sdk')
