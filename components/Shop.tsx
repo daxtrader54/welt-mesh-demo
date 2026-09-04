@@ -325,6 +325,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           body: JSON.stringify({
             brokerType: access.brokerType,
             brokerName: access.brokerName,
+            accountId: account.account?.accountId ?? null,
             accountName: account.account?.accountName ?? null,
             authToken: account.accessToken,
             tokenId: account.tokenId ?? null,
@@ -405,7 +406,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     [note]
   )
 
-  const { open, busy } = useMeshLink({
+  const { open, busy, close: closeLink } = useMeshLink({
     onEvent: event =>
       dispatch({
         type: 'link',
@@ -480,7 +481,12 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
        * default: a shopper who does not own crypto reads a list of self-custody wallets as a
        * question they cannot answer, and a tester did.
        */
-      void open('connect', !force && suggested ? { integrationId: suggested.id } : undefined)
+      // `fresh` on a forced connect: they asked for a different account, so do not hand Link the
+      // one they already have.
+      void open(
+        'connect',
+        force ? { fresh: true } : suggested ? { integrationId: suggested.id } : undefined
+      )
     },
     [open, connection, readPortfolio, suggested]
   )
@@ -662,8 +668,12 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * it, which keeps the holdings path and the Link path from drifting apart.
    */
   useEffect(() => {
-    if (order.failure?.code === 'connection_expired') void forgetConnection()
-  }, [order.failure?.code, forgetConnection])
+    if (order.failure?.code !== 'connection_expired') return
+    // Close Mesh's screen first. Leaving it up hides our own recovery behind an iframe whose only
+    // button retries the session that just failed.
+    closeLink()
+    void forgetConnection()
+  }, [order.failure?.code, forgetConnection, closeLink])
 
   /** Fetch the SDK chunk as the shopper reaches checkout, so the pay click does not pay for it. */
   useEffect(() => {

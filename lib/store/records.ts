@@ -20,6 +20,8 @@ export type Connection = {
   tokenId: string | null
   brokerType: string
   brokerName: string
+  /** Mesh's own id for the account. Replayed into `accessTokens`, which wants it populated. */
+  accountId: string | null
   accountName: string | null
   /** Never leaves the server. Never logged. Never rendered. */
   authToken: string
