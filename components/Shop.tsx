@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import Image from 'next/image'
 import type { LinkEventType, LinkPayload, TransferFinishedPayload } from '@meshconnect/web-link-sdk'
 import { failure, type Failure } from '@/lib/failure'
 import { usd } from '@/lib/format'
@@ -12,6 +13,7 @@ import {
   PRODUCT,
   SPEC,
   colourway as findColourway,
+  plateSrc,
   type ColourwayId,
   type PlateId
 } from '@/lib/product'
@@ -812,18 +814,46 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
             />
           )}
 
+          {/**
+           * Checkout and the receipt want opposite layouts, and sharing one grid gave the wrong
+           * half to each.
+           *
+           * A checkout is about finalising an amount. Handing sixty percent of the screen to an
+           * annotated product drawing and squeezing the itemisation, the delivery address and the
+           * payment method into a 384px rail is the product page wearing a checkout as a sidebar.
+           * So checkout drops the plate, centres one column, and shows the shoe the way a checkout
+           * shows anything: a thumbnail on its line item. It also gives Mesh Link half as much
+           * width again to render in.
+           *
+           * The receipt keeps the plate, because that is the YOURS moment and the product earns
+           * the room there.
+           */}
           {(step === 'checkout' || step === 'done') && item && (
-            <main className="grid gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]">
-              <section className="order-2 lg:order-none md:col-start-1 md:row-start-1 lg:col-start-1 lg:row-start-1">
-                <ProductPlate
-                  colourway={item.colourway.id}
-                  plate={plate}
-                  onPlateChange={setPlate}
-                  owned={paid}
-                />
-              </section>
+            <main
+              className={
+                step === 'done'
+                  ? 'grid gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,20rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]'
+                  : 'mx-auto w-full max-w-[38rem] py-8'
+              }
+            >
+              {step === 'done' && (
+                <section className="order-2 lg:order-none md:col-start-1 md:row-start-1 lg:col-start-1 lg:row-start-1">
+                  <ProductPlate
+                    colourway={item.colourway.id}
+                    plate={plate}
+                    onPlateChange={setPlate}
+                    owned={paid}
+                  />
+                </section>
+              )}
 
-              <section className="order-1 flex flex-col gap-7 md:order-none md:col-start-2 md:row-start-1 lg:col-start-2 lg:row-start-1">
+              <section
+                className={
+                  step === 'done'
+                    ? 'order-1 flex flex-col gap-7 md:order-none md:col-start-2 md:row-start-1 lg:col-start-2 lg:row-start-1'
+                    : 'flex flex-col gap-7'
+                }
+              >
                 {step === 'checkout' && !paid && (
                   <>
                     <div>
@@ -834,12 +864,34 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                       >
                         How would you like to pay?
                       </h1>
-                      <dl className="rule-t mt-5 pt-3">
+                      {/* The itemisation a checkout is supposed to have: what it is, which one,
+                          which size, and what it costs, with the shoe present but not in charge. */}
+                      <div className="rule-t mt-5 flex items-center gap-4 pt-4">
+                        <div className="relative h-20 w-20 shrink-0 border border-rule bg-plate">
+                          <Image
+                            src={plateSrc(item.colourway.id, 'lateral')}
+                            alt=""
+                            fill
+                            sizes="80px"
+                            className="object-contain p-1"
+                          />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold leading-tight">
+                            {PRODUCT.brand} {PRODUCT.name}
+                          </div>
+                          <div className="note">
+                            {item.colourway.name} · UK {item.size} · Qty 1
+                          </div>
+                          <div className="note">{item.colourway.ref}</div>
+                        </div>
+                        <div className="data shrink-0 text-sm">{usd(PRODUCT.price)}</div>
+                      </div>
+
+                      <dl className="mt-4">
                         <div className="flex items-baseline justify-between gap-4 py-1">
-                          <dt className="text-sm text-muted">
-                            {PRODUCT.name} · {item.colourway.name} · UK {item.size}
-                          </dt>
-                          <dd className="data text-sm">{usd(PRODUCT.price)}</dd>
+                          <dt className="text-sm text-muted">Delivery</dt>
+                          <dd className="data text-sm">Free</dd>
                         </div>
                         {HANDLING_FEE > 0 && (
                           <div className="flex items-baseline justify-between gap-4 py-1">
@@ -854,6 +906,26 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                           </dd>
                         </div>
                       </dl>
+
+                      {/**
+                       * Said before Link opens, not after.
+                       *
+                       * The merchant receives exactly $50.00, so that is the total. The exchange
+                       * then charges its own withdrawal fee on top, which was one cent in sandbox,
+                       * and the first place the shopper saw it was Mesh's own screen reading
+                       * $50.01. Mesh's breakdown does not itemise it either: it lists the payment
+                       * and a free gas fee and then a total a penny higher. Arriving at a number
+                       * nobody warned you about is the moment a checkout loses trust, and it costs
+                       * one line to avoid.
+                       */}
+                      {choseCrypto && (
+                        <p className="note mt-2">
+                          {BRAND} receives {usd(PRODUCT.price + HANDLING_FEE)}. Your exchange adds
+                          its own withdrawal fee on top, so the amount it debits is slightly
+                          higher. Mesh shows the exact total before you confirm, and the receipt
+                          breaks it down.
+                        </p>
+                      )}
                       {isComplete(address) && !linkOpen && (
                         <DeliverySummary address={address} onEdit={() => goto('delivery')} />
                       )}
