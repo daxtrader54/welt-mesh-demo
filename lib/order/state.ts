@@ -30,7 +30,15 @@ export type StepId =
 
 export type StepState = 'pending' | 'active' | 'done' | 'failed'
 
-export type Fact = { label: string; value: string }
+/**
+ * A fact on a manifest row.
+ *
+ * `technical` marks the ones a shopper has no use for: broker type strings, preview UUIDs,
+ * transaction hashes. They stay in the state, so the panel and the copied log still carry them,
+ * and they are filtered out of the shop, where they were the thing that made a checkout read as a
+ * developer test.
+ */
+export type Fact = { label: string; value: string; technical?: boolean }
 
 export type Step = {
   id: StepId
@@ -171,7 +179,7 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
         steps: mark(state.steps, 'holdings', 'done', action.at, [
           { label: 'Institution', value: action.institution ?? '—' },
           { label: 'Positions', value: String(action.positions) },
-          { label: 'USDC', value: num(action.usdc) }
+          { label: 'Balance', value: num(action.usdc) }
         ])
       }
 
@@ -272,8 +280,8 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
         source: { name: token.brokerName, type: token.brokerType },
         steps: mark(next.steps, 'connected', 'done', at, [
           { label: 'Provider', value: token.brokerName },
-          { label: 'Type', value: token.brokerType },
-          { label: 'Accounts', value: String(token.accountTokens?.length ?? 0) }
+          { label: 'Type', value: token.brokerType, technical: true },
+          { label: 'Accounts', value: String(token.accountTokens?.length ?? 0), technical: true }
         ])
       }
     }
@@ -363,7 +371,7 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
                   }
                 ]
               : []),
-            { label: 'Preview', value: p.previewId }
+            { label: 'Preview', value: p.previewId, technical: true }
           ]
         )
       }
@@ -392,7 +400,7 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
         payment: { ...next.payment, txId: event.payload.txId },
         steps: mark(next.steps, 'authorised', 'done', 0, [
           { label: 'Status', value: event.payload.status },
-          { label: 'Transaction', value: event.payload.txId }
+          { label: 'Transaction', value: event.payload.txId, technical: true }
         ])
       }
 
@@ -427,8 +435,8 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
         },
         steps: mark(next.steps, 'authorised', 'done', at, [
           { label: 'Status', value: p.status },
-          { label: 'Transfer', value: p.transferId ?? '—' },
-          { label: 'Reference', value: p.txHash ?? '—' }
+          { label: 'Transfer', value: p.transferId ?? '—', technical: true },
+          { label: 'Reference', value: p.txHash ?? '—', technical: true }
         ])
       }
     }

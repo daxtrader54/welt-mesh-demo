@@ -98,7 +98,10 @@ export function ProductPanels() {
           </div>
         </div>
 
-        <ul className="grid gap-5 sm:grid-cols-3">
+        {/* One column. These live in the product page's right-hand rail, so the three-column grid
+            gave each card about 109px, and it went to one column at exactly the width where the
+            container was widest. A sidebar holds a stacked list. */}
+        <ul className="grid gap-5">
           {REVIEWS.map(r => (
             <li key={r.title} className="rule-t pt-3">
               <Stars n={r.stars} />
@@ -115,7 +118,7 @@ export function ProductPanels() {
       </Panel>
 
       <Panel title="Delivery and returns">
-        <dl className="grid gap-3 sm:grid-cols-2">
+        <dl className="grid gap-3">
           {[
             ['Standard delivery', 'Free on this drop'],
             ['Dispatch', 'Next working day'],
