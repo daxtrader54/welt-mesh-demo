@@ -1,7 +1,7 @@
 'use client'
 
 import { usd } from '@/lib/format'
-import { COLOURWAYS, PRODUCT, SIZES, type ColourwayId } from '@/lib/product'
+import { COLOURWAYS, PRODUCT, SAVING, SAVING_PERCENT, SIZES, type ColourwayId } from '@/lib/product'
 
 /** Price, colour and size: the parts of the product page a customer actually operates. */
 
@@ -16,7 +16,7 @@ export function PriceBlock() {
         className="data px-2 py-1 text-[11px] font-semibold uppercase tracking-[0.1em]"
         style={{ background: 'var(--color-ink)', color: 'var(--color-ground)' }}
       >
-        Save {usd(PRODUCT.rrp - PRODUCT.price)}
+        Save {usd(SAVING)} · {SAVING_PERCENT}%
       </span>
     </div>
   )

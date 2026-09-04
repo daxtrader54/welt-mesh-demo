@@ -2,7 +2,15 @@
 
 import Image from 'next/image'
 import { usd } from '@/lib/format'
-import { COLOURWAYS, PRODUCT, plateSrc, type ColourwayId } from '@/lib/product'
+import {
+  COLOURWAYS,
+  PRODUCT,
+  SAVING,
+  SAVING_PERCENT,
+  SIZE_RUN,
+  plateSrc,
+  type ColourwayId
+} from '@/lib/product'
 
 /**
  * The listing page.
@@ -33,11 +41,22 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
           </p>
         </div>
 
-        <div className="text-right">
+        <div className="shrink-0 text-right">
+          {/* The saving stated outright, which is what a clearance listing is for. Both figures
+              come from the product record, so the badge cannot drift from the price. */}
+          <span
+            className="data mb-2 inline-block px-2 py-1 text-[11px] font-bold uppercase tracking-[0.08em]"
+            style={{ background: 'var(--color-accent)', color: 'var(--color-ink)' }}
+          >
+            Save {usd(SAVING)} · {SAVING_PERCENT}% off
+          </span>
           <div className="data text-4xl font-semibold leading-none tracking-[-0.03em]">
             {usd(PRODUCT.price)}
           </div>
-          <div className="label mt-2">Was {usd(PRODUCT.rrp)} · All sizes</div>
+          <div className="label mt-2">
+            Was <span className="line-through">{usd(PRODUCT.rrp)}</span> · UK {SIZE_RUN.from} to{' '}
+            {SIZE_RUN.to}
+          </div>
         </div>
       </div>
 
@@ -64,6 +83,13 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
                   {String(i + 1).padStart(2, '0')}
                 </span>
 
+                <span
+                  className="data absolute left-3 top-9 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]"
+                  style={{ background: 'var(--color-ink)', color: 'var(--color-plate)' }}
+                >
+                  -{SAVING_PERCENT}%
+                </span>
+
                 {/* The colourway's own accent, used once per card, the same rule the shop uses. */}
                 <span
                   className="absolute right-3 top-3 h-6 w-6 border"
@@ -85,7 +111,13 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
                 <span className="data text-sm font-semibold">{usd(PRODUCT.price)}</span>
               </div>
               <div className="mt-0.5 flex items-baseline justify-between gap-3">
-                <span className="label">Sizes 6 to 12</span>
+                {/* Derived, and honest about the gaps. A clearance run with two sizes gone is what
+                    a clearance run looks like, and saying so beats advertising a size we cannot
+                    sell. */}
+                <span className="label">
+                  UK {SIZE_RUN.from} to {SIZE_RUN.to}
+                  {SIZE_RUN.soldOut > 0 ? ` · ${SIZE_RUN.soldOut} sold out` : ''}
+                </span>
                 <span className="data text-xs text-faint line-through">{usd(PRODUCT.rrp)}</span>
               </div>
             </button>
