@@ -3,7 +3,7 @@ import { meshEnv } from '@/lib/env'
 import { failure } from '@/lib/failure'
 import { fail, guard, ok, readJson } from '@/lib/http'
 import { createConnectToken, createPaymentToken } from '@/lib/mesh/client'
-import { ACCEPTED_ASSETS, COLOURWAYS, PRODUCT, SIZES, isAccepted } from '@/lib/product'
+import { ACCEPTED_ASSETS, COLOURWAYS, PRODUCT, SIZES, inStock, isAccepted } from '@/lib/product'
 import { ensureSessionId, meshUserId } from '@/lib/session'
 import { getSession, putOrder, underRateLimit, type OrderRecord } from '@/lib/store/records'
 import { randomUUID } from 'node:crypto'
@@ -126,9 +126,12 @@ export async function POST(req: Request) {
     }
 
     // Paying. Validate the selection, then build the order from server-side truth.
+    //
+    // Stock is per colourway, so the size has to be checked against the colour that was chosen.
+    // Checking it against the size run alone would sell a UK 9 in Stone, which has never had one.
     const colourway = COLOURWAYS.find(c => c.id === parsed.data.colourway)
-    const size = SIZES.find(s => s.uk === parsed.data.size && s.inStock)
-    if (!colourway || !size) {
+    const size = SIZES.find(s => s.uk === parsed.data.size)
+    if (!colourway || !size || !inStock(colourway.id, size.uk)) {
       return fail(
         failure('unknown', {
           title: 'Choose a colour and a size first',

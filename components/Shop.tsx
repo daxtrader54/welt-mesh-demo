@@ -13,6 +13,7 @@ import {
   PRODUCT,
   SPEC,
   colourway as findColourway,
+  inStock,
   plateSrc,
   type ColourwayId,
   type PlateId
@@ -477,6 +478,22 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     }
   })
 
+  /**
+   * Changing colour can invalidate the size.
+   *
+   * Stock is per colourway: Stone has UK 7 and 12 and nothing else, Black has the full run. A size
+   * chosen in one colour and carried into another would put a shopper on a checkout for a pair
+   * that does not exist, and the server would refuse it at the link token with a generic message.
+   * Clearing it here means the picker asks again, which is what every shop does.
+   */
+  const pickColourway = useCallback(
+    (id: ColourwayId) => {
+      setColourwayId(id)
+      setSize(current => (current && inStock(id, current) ? current : null))
+    },
+    []
+  )
+
   const addToBag = useCallback(() => {
     if (!size) {
       setSizeNudge(true)
@@ -928,11 +945,10 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         </div>
       )}
       <div className="min-w-0 flex-1">
-        {/* The bottom padding clears the fixed console bar, plus whatever iOS puts below it. */}
-        <div
-          className="mx-auto max-w-[1180px] px-5 pb-28 sm:px-6 lg:px-10"
-          style={{ paddingBottom: 'calc(7rem + env(safe-area-inset-bottom))' }}
-        >
+        {/* The content column. Clearing the fixed console bar is the footer's job now: it is a
+            solid dark band at the bottom of every page, so bottom padding here would leave a strip
+            of ground below it and make the band look like it had come loose. */}
+        <div className="mx-auto max-w-[1180px] px-5 sm:px-6 lg:px-10">
           <header className="rule-b flex flex-wrap items-baseline justify-between gap-x-8 gap-y-2 py-5 sm:py-6">
             <button
               type="button"
@@ -992,7 +1008,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           {step === 'shop' && (
             <ShopFront
               onSelect={id => {
-                setColourwayId(id)
+                pickColourway(id)
                 setPlate('lateral')
                 goto('product')
               }}
@@ -1027,10 +1043,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                     </div>
                   </div>
 
-                  <ColourwayPicker value={colourwayId} onChange={setColourwayId} />
+                  <ColourwayPicker value={colourwayId} onChange={pickColourway} />
 
                   <div>
                     <SizePicker
+                      colourway={colourwayId}
                       value={size}
                       onChange={v => {
                         setSize(v)
@@ -1474,9 +1491,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
             {showManifest && <Manifest order={order} />}
           </main>
-
-          <Footer />
         </div>
+
+        {/* Outside the padded column, so the band runs edge to edge on a phone the way every
+            retailer's does. Its own padding carries the console bar clearance. */}
+        <Footer />
       </div>
 
       {justAdded && bag && (

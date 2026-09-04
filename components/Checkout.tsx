@@ -1,7 +1,14 @@
 'use client'
 
 import { usd } from '@/lib/format'
-import { COLOURWAYS, PRODUCT, SAVING, SAVING_PERCENT, SIZES, type ColourwayId } from '@/lib/product'
+import {
+  COLOURWAYS,
+  PRODUCT,
+  SAVING,
+  SAVING_PERCENT,
+  sizesFor,
+  type ColourwayId
+} from '@/lib/product'
 
 /** Price, colour and size: the parts of the product page a customer actually operates. */
 
@@ -75,20 +82,33 @@ export function ColourwayPicker({
   )
 }
 
+/**
+ * Sizes for the colour that is actually selected.
+ *
+ * Availability is a property of the colourway, not of the shoe: Black still has the full run,
+ * Stone is down to two pairs. Reading one global list meant every colour offered the same sizes
+ * and the same gaps, which is the one thing an end-of-line drop never looks like.
+ */
 export function SizePicker({
+  colourway,
   value,
   onChange,
   disabled
 }: {
+  colourway: ColourwayId
   value: string | null
   onChange: (uk: string) => void
   disabled?: boolean
 }) {
+  const sizes = sizesFor(colourway)
+  const gone = sizes.filter(s => !s.inStock)
+  const low = sizes.filter(s => s.inStock && s.units <= 2)
+
   return (
     <div>
       <div className="label mb-2">Size · UK</div>
       <div className="flex flex-wrap gap-2">
-        {SIZES.map(s => {
+        {sizes.map(s => {
           const active = s.uk === value
           return (
             <button
@@ -97,8 +117,15 @@ export function SizePicker({
               disabled={disabled || !s.inStock}
               onClick={() => onChange(s.uk)}
               aria-pressed={active}
-              title={s.inStock ? `UK ${s.uk} · EU ${s.eu}` : `UK ${s.uk} · out of stock`}
-              className={`data h-10 min-w-[3rem] border px-3 text-sm transition-colors ${
+              aria-label={
+                s.inStock
+                  ? `UK ${s.uk}, EU ${s.eu}, ${s.units} left`
+                  : `UK ${s.uk}, out of stock in this colour`
+              }
+              title={
+                s.inStock ? `UK ${s.uk} · EU ${s.eu} · ${s.units} left` : `UK ${s.uk} · sold out`
+              }
+              className={`data relative h-10 min-w-[3rem] border px-3 text-sm transition-colors ${
                 active
                   ? 'border-ink bg-ink text-ground'
                   : s.inStock
@@ -111,11 +138,22 @@ export function SizePicker({
           )
         })}
       </div>
+
+      {/* Both lines are derived from the same numbers the buttons are, so neither can advertise
+          a size the checkout would then refuse. */}
       <p className="note mt-2">
-        {SIZES.filter(s => !s.inStock)
-          .map(s => `UK ${s.uk}`)
-          .join(' and ')}{' '}
-        are out of stock across every colourway.
+        {gone.length > 0 && (
+          <>
+            {gone.map(s => `UK ${s.uk}`).join(', ')} sold out in this colour
+            {low.length > 0 ? '. ' : '.'}
+          </>
+        )}
+        {low.length > 0 && (
+          <>
+            {low.map(s => `${s.units === 1 ? 'One' : String(s.units)} left in UK ${s.uk}`).join(', ')}.
+          </>
+        )}
+        {gone.length === 0 && low.length === 0 && <>Full run still available in this colour.</>}
       </p>
     </div>
   )

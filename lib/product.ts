@@ -72,13 +72,51 @@ export type Colourway = {
   swatch: string
   /** The colourway's own accent, taken off the shoe. Drives callout lines, never the pay button. */
   accent: string
+  /**
+   * Units left, by UK size. A size missing from this map is one this colourway never had or has
+   * sold through, and both read the same to a shopper: you cannot buy it.
+   *
+   * Per colourway rather than one list across the range, because that is how a clearance run
+   * actually depletes. A single global size list meant every colour offered the same four sizes
+   * and sold out of the same two, which is the one thing an end-of-line drop never looks like.
+   */
+  stock: Record<string, number>
 }
 
 export const COLOURWAYS: Colourway[] = [
-  { id: 'charcoal', ref: 'XS30329', name: 'Charcoal / Lime', swatch: '#4A4E52', accent: '#7FBF2A' },
-  { id: 'navy', ref: 'XS30322', name: 'Navy / Amber', swatch: '#2A3348', accent: '#D98A1F' },
-  { id: 'stone', ref: 'XS30330', name: 'Stone / Taupe', swatch: '#C8C0B2', accent: '#3A4A6B' },
-  { id: 'black', ref: 'XS30325', name: 'Black / Black', swatch: '#1C1C1C', accent: '#6E6E6E' }
+  {
+    id: 'charcoal',
+    ref: 'XS30329',
+    name: 'Charcoal / Lime',
+    swatch: '#4A4E52',
+    accent: '#7FBF2A',
+    stock: { '7': 3, '9': 5, '10': 2, '12': 1 }
+  },
+  {
+    id: 'navy',
+    ref: 'XS30322',
+    name: 'Navy / Amber',
+    swatch: '#2A3348',
+    accent: '#D98A1F',
+    stock: { '8': 2, '9': 1, '11': 4 }
+  },
+  {
+    id: 'stone',
+    ref: 'XS30330',
+    name: 'Stone / Taupe',
+    swatch: '#C8C0B2',
+    accent: '#3A4A6B',
+    stock: { '7': 1, '12': 2 }
+  },
+  {
+    // The full run, and the reason the shop is not uniformly picked over. Black restocks.
+    id: 'black',
+    ref: 'XS30325',
+    name: 'Black / Black',
+    swatch: '#1C1C1C',
+    accent: '#6E6E6E',
+    stock: { '7': 6, '8': 4, '9': 8, '10': 5, '11': 3, '12': 2 }
+  }
 ]
 
 export const DEFAULT_COLOURWAY: ColourwayId = 'charcoal'
@@ -98,35 +136,71 @@ export function plateSrc(colourway: ColourwayId, plate: PlateId): string {
 }
 
 /**
- * Sizes follow the source listing, gaps included. UK 10 and 11 are genuinely absent from it,
- * which is what a clearance range actually looks like, so they are shown and disabled rather
- * than quietly removed.
+ * The full size run the shoe was made in. What is buyable comes from the colourway.
+ *
+ * Sizes are shown and disabled rather than quietly removed, because a gap in a clearance range is
+ * information: it tells a shopper the run is picked over, which is true and is the reason for the
+ * price.
  */
-export type Size = { uk: string; eu: string; inStock: boolean }
+export type Size = { uk: string; eu: string }
 
 export const SIZES: Size[] = [
-  { uk: '7', eu: '41', inStock: true },
-  { uk: '8', eu: '42', inStock: false },
-  { uk: '9', eu: '43', inStock: true },
-  { uk: '10', eu: '44.5', inStock: true },
-  { uk: '11', eu: '46', inStock: false },
-  { uk: '12', eu: '47.5', inStock: true }
+  { uk: '7', eu: '41' },
+  { uk: '8', eu: '42' },
+  { uk: '9', eu: '43' },
+  { uk: '10', eu: '44.5' },
+  { uk: '11', eu: '46' },
+  { uk: '12', eu: '47.5' }
 ]
 
+export type SizeStock = Size & { units: number; inStock: boolean }
+
+/** Every size, with this colourway's stock against it. The one place availability is decided. */
+export function sizesFor(id: ColourwayId): SizeStock[] {
+  const { stock } = colourway(id)
+  return SIZES.map(s => {
+    const units = stock[s.uk] ?? 0
+    return { ...s, units, inStock: units > 0 }
+  })
+}
+
+export function inStock(id: ColourwayId, uk: string | null | undefined): boolean {
+  return Boolean(uk) && (colourway(id).stock[uk!] ?? 0) > 0
+}
+
 /**
- * Derived from the size run, never written out by hand.
+ * Derived, never written out by hand.
  *
  * The listing advertised "Sizes 6 to 12" as a literal string and kept advertising it after UK 6 was
  * taken out of stock, which is the sort of thing a shop gets complained at for. Anything the shop
- * says about its sizes now comes from the same array the size picker reads.
+ * says about its sizes comes from the same numbers the size picker reads.
  */
-export const SIZE_RUN = (() => {
-  const stocked = SIZES.filter(s => s.inStock)
+export function sizeRunFor(id: ColourwayId) {
+  const sizes = sizesFor(id)
+  const stocked = sizes.filter(s => s.inStock)
   return {
     from: stocked[0]?.uk ?? null,
     to: stocked.at(-1)?.uk ?? null,
     stocked: stocked.length,
-    soldOut: SIZES.length - stocked.length
+    soldOut: sizes.length - stocked.length,
+    units: stocked.reduce((n, s) => n + s.units, 0),
+    total: sizes.length
+  }
+}
+
+/** The range across every colourway, for the parts of the listing that speak for the whole shop. */
+export const SIZE_RUN = (() => {
+  const anywhere = SIZES.filter(s => COLOURWAYS.some(c => (c.stock[s.uk] ?? 0) > 0))
+  return {
+    from: anywhere[0]?.uk ?? null,
+    to: anywhere.at(-1)?.uk ?? null,
+    stocked: anywhere.length,
+    soldOut: SIZES.length - anywhere.length,
+    total: SIZES.length,
+    units: COLOURWAYS.reduce(
+      (n, c) => n + Object.values(c.stock).reduce((m, u) => m + u, 0),
+      0
+    )
   }
 })()
 
