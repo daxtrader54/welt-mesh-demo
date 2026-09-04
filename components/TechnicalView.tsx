@@ -257,6 +257,11 @@ export function TechnicalView({
   const [copied, setCopied] = useState(false)
 
   /** The probe harness had a copy button and it was the most used thing on it. */
+  const fundingLines = (funding.assets ?? []).map(
+    a =>
+      `${a.symbol.padEnd(6)} eligible=${a.eligible} withFunding=${a.eligibleWithFunding}${a.reason ? ` reason=${a.reason}` : ''}`
+  )
+
   async function copySession(o: OrderState, c: ServerCall[]) {
     const at0 = o.log[0]?.at ?? c[0]?.at ?? Date.now()
     const rel = (t: number) => `+${String(t - at0).padStart(6)}ms`
@@ -265,10 +270,18 @@ export function TechnicalView({
       `# status=${o.status} source=${o.source?.name ?? '-'} transfer=${o.payment.transferId ?? '-'}`,
       '',
       '## Server calls',
-      ...c.map(x => `${rel(x.at)}  ${x.route}${x.ms ? ` (${x.ms}ms)` : ''}${x.mesh ? ` -> ${x.mesh}` : ''}`),
+      // ok/fail included, because a pasted log that omits it cannot answer the first question
+      // anyone asks of it, which is whether the call worked.
+      ...c.map(
+        x =>
+          `${rel(x.at)}  ${x.ok ? 'ok  ' : 'FAIL'} ${x.route}${x.ms ? ` (${x.ms}ms)` : ''}${x.mesh ? ` -> ${x.mesh}` : ''}`
+      ),
       '',
       `## Mesh SDK events (${o.log.length} of ${SDK_EVENT_TYPES} possible types)`,
       ...o.log.map(e => `${rel(e.at)}  ${e.type}  ${JSON.stringify(e.payload ?? null)}`),
+      '',
+      '## Funding (transfers/managed/configure)',
+      ...(fundingLines.length ? fundingLines : ['(not asked, or no answer)']),
       '',
       '## Manifest',
       ...o.steps.map(
