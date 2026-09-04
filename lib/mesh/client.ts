@@ -45,6 +45,16 @@ async function meshPost<T>(path: string, body: unknown, schema: ZodType<T>): Pro
 
     const ms = Date.now() - started
     const raw: unknown = await res.json().catch(() => null)
+    // Status first. A 5xx returning an HTML error page should read as a server failure, not as
+    // "unexpected response shape", which sends whoever is debugging to the wrong place.
+    if (res.status >= 500) {
+      return {
+        ok: false,
+        ms,
+        error: failure('network', { detail: `HTTP ${res.status} from ${path}` })
+      }
+    }
+
     const parsed = schema.safeParse(raw)
 
     if (!parsed.success) {
@@ -130,7 +140,17 @@ export async function getPortfolio(authToken: string, brokerType: string): Promi
   ])
 
   if (!holdings.ok) {
-    return { ok: false, ms: Date.now() - started, error: { ...holdings.error, code: 'portfolio_failed' } }
+    // Rebuilt rather than spread: `failure()` looks up title, hint and retryable from the code at
+    // construction, so overriding only `code` leaves the link-token copy attached to a holdings
+    // error and the shopper reads "We could not start the payment" about their balances.
+    return {
+      ok: false,
+      ms: Date.now() - started,
+      error: failure('portfolio_failed', {
+        detail: holdings.error.detail,
+        reference: holdings.error.reference
+      })
+    }
   }
 
   const content = holdings.data.content

@@ -41,6 +41,8 @@ export function truncate(value: string | null | undefined, lead = 6, tail = 6): 
 /** Auth tokens must never be shown. This exists so the technical view can prove one was received. */
 export function maskToken(value: string | null | undefined): string {
   if (!value) return '—'
+  // Anything short enough for the ends to reconstruct the middle is hidden outright.
+  if (value.length < 16) return '•'.repeat(12)
   return `${value.slice(0, 4)}${'•'.repeat(8)}${value.slice(-4)}`
 }
 

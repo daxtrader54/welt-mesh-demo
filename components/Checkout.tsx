@@ -112,7 +112,10 @@ export function SizePicker({
         })}
       </div>
       <p className="note mt-2">
-        UK 10 and 11 are out of stock in this colourway.
+        {SIZES.filter(s => !s.inStock)
+          .map(s => `UK ${s.uk}`)
+          .join(' and ')}{' '}
+        are out of stock across every colourway.
       </p>
     </div>
   )

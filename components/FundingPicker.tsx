@@ -40,14 +40,30 @@ export function FundingNote() {
 
   if (!providers?.length) return null
 
-  const funders = unique(providers.filter(p => p.canPay).map(p => p.name))
+  // Split by what Link will actually offer here, not just by what could settle the payment in
+  // principle. Promising Kraken on a screen whose next step cannot show Kraken is worse than a
+  // shorter list.
+  const here = unique(providers.filter(p => p.canPay && p.sandboxAvailable).map(p => p.name))
+  const elsewhere = unique(providers.filter(p => p.canPay && !p.sandboxAvailable).map(p => p.name))
   const wallets = unique(providers.filter(p => p.sandboxAvailable && !p.canPay).map(p => p.name))
+
+  if (!here.length && !elsewhere.length) return null
 
   return (
     <p className="note">
-      {list(funders)} can fund this payment in {PRODUCT.settlement.symbol} on{' '}
-      {PRODUCT.settlement.network}. {list(wallets)} will connect but hold testnet assets only in the
-      sandbox, so they cannot reach it.
+      {here.length > 0 && (
+        <>
+          {list(here)} can fund this payment in {PRODUCT.settlement.symbol} on{' '}
+          {PRODUCT.settlement.network}.{' '}
+        </>
+      )}
+      {elsewhere.length > 0 && <>{list(elsewhere)} can too, in production. </>}
+      {wallets.length > 0 && (
+        <>
+          {list(wallets)} will connect but hold testnet assets only in the sandbox, so they cannot
+          reach it.
+        </>
+      )}
     </p>
   )
 }

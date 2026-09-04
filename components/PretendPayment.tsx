@@ -45,7 +45,7 @@ export function PretendPaymentModal({
         className="stamp relative w-full max-w-md border border-rule bg-plate p-6 sm:w-auto sm:min-w-[26rem]"
       >
         <div className="rule-b flex items-center justify-between pb-3">
-          <span className="text-base font-semibold">{isApple ? ' Pay' : 'Pay by card'}</span>
+          <span className="text-base font-semibold">{isApple ? 'Apple Pay' : 'Pay by card'}</span>
           <button type="button" onClick={onClose} className="btn-quiet border-0">
             Close
           </button>
@@ -58,11 +58,16 @@ export function PretendPaymentModal({
 
         {isApple ? (
           <div className="py-6 text-center">
-            <div className="mx-auto grid h-14 w-14 place-items-center rounded-full border-2 border-ink">
-              <span className="text-xl" aria-hidden>
-
-              </span>
-            </div>
+            {/* Drawn, not typed. The Apple glyph lives in a private-use codepoint that renders as
+                tofu on Windows and Android, which is most of the machines this will be shown on. */}
+            <svg
+              viewBox="0 0 24 24"
+              className="mx-auto h-14 w-14"
+              fill="currentColor"
+              aria-hidden
+            >
+              <path d="M16.3 12.7c0-2.2 1.8-3.3 1.9-3.4-1-1.5-2.6-1.7-3.2-1.7-1.4-.1-2.7.8-3.3.8-.7 0-1.7-.8-2.8-.8-1.5 0-2.8.8-3.6 2.1-1.5 2.6-.4 6.5 1.1 8.6.7 1 1.6 2.2 2.7 2.2 1.1 0 1.5-.7 2.8-.7 1.3 0 1.6.7 2.8.7 1.2 0 1.9-1 2.6-2.1.8-1.2 1.2-2.3 1.2-2.4-.1 0-2.2-.9-2.2-3.3zM14.1 6.2c.6-.7 1-1.7.9-2.7-.9 0-2 .6-2.6 1.3-.6.6-1.1 1.7-.9 2.6 1 .1 2-.5 2.6-1.2z" />
+            </svg>
             <p className="mt-4 text-sm font-medium">Double-click the side button to pay</p>
           </div>
         ) : (

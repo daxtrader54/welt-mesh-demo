@@ -9,60 +9,67 @@ import { z } from 'zod'
  *  - `message` and `errorType` come back as empty strings on success, not absent.
  *  - `displayMessage` is absent on some errors, so it is optional.
  *  - `errorHash` is present on success too. It is what Mesh support asks for.
+ *
+ * Everything Mesh's OpenAPI marks nullable uses `.nullish()` rather than `.optional()`. Zod's
+ * `.optional()` accepts `undefined` but rejects an explicit `null`, and a single null anywhere in
+ * the envelope would fail the parse and take the checkout down. The sandbox does not send nulls
+ * today; the published contract says it may.
  */
 
 /** The envelope every Mesh endpoint wraps its payload in. */
 const envelope = z.object({
   status: z.string(),
-  message: z.string().optional(),
-  displayMessage: z.string().optional(),
-  errorHash: z.string().optional(),
-  teamCode: z.string().optional(),
-  errorType: z.string().optional()
+  message: z.string().nullish(),
+  displayMessage: z.string().nullish(),
+  errorHash: z.string().nullish(),
+  teamCode: z.string().nullish(),
+  errorType: z.string().nullish()
 })
 
 export const linkTokenResponse = envelope.extend({
   content: z
     .object({
       linkToken: z.string(),
-      paymentLink: z.string().optional()
+      paymentLink: z.string().nullish()
     })
-    .optional()
+    .nullish()
 })
 
 /** One holding. `distribution` exists on the wire but we have no use for it, so it is dropped. */
 export const cryptoPosition = z.object({
-  name: z.string().optional(),
-  symbol: z.string(),
+  name: z.string().nullish(),
+  // Nullable in Mesh's schema, so it is coerced rather than required: a null symbol should cost
+  // one unnamed row, not the whole portfolio read.
+  symbol: z.string().nullish(),
   amount: z.number(),
-  costBasis: z.number().optional(),
-  marketValue: z.number().optional(),
-  lastPrice: z.number().optional()
+  costBasis: z.number().nullish(),
+  marketValue: z.number().nullish(),
+  lastPrice: z.number().nullish()
 })
 
 export const holdingsResponse = envelope.extend({
   content: z
     .object({
-      status: z.string().optional(),
-      errorMessage: z.string().optional(),
-      displayMessage: z.string().optional(),
-      type: z.string().optional(),
-      accountId: z.string().optional(),
-      institutionName: z.string().optional(),
-      accountName: z.string().optional(),
-      cryptocurrencyPositions: z.array(cryptoPosition).optional()
+      status: z.string().nullish(),
+      errorMessage: z.string().nullish(),
+      displayMessage: z.string().nullish(),
+      type: z.string().nullish(),
+      accountId: z.string().nullish(),
+      institutionName: z.string().nullish(),
+      accountName: z.string().nullish(),
+      cryptocurrencyPositions: z.array(cryptoPosition).nullish()
     })
-    .optional()
+    .nullish()
 })
 
 export const holdingsValueResponse = envelope.extend({
   content: z
     .object({
-      totalValue: z.number().optional(),
-      cryptocurrenciesValue: z.number().optional(),
-      fiatValue: z.number().optional()
+      totalValue: z.number().nullish(),
+      cryptocurrenciesValue: z.number().nullish(),
+      fiatValue: z.number().nullish()
     })
-    .optional()
+    .nullish()
 })
 
 export type LinkTokenResponse = z.infer<typeof linkTokenResponse>

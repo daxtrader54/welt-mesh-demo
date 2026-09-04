@@ -102,8 +102,40 @@ export async function claimWebhookEvent(eventId: string): Promise<boolean> {
   return store().setIfAbsent(webhookKey(eventId), { at: Date.now() }, WEBHOOK_TTL)
 }
 
-/** Link tokens are real Mesh resources. This stops a stuck client minting them in a loop. */
+/**
+ * Link tokens are real Mesh resources, so a stuck client should not mint them in a loop.
+ *
+ * Fails open. A rate limiter is a courtesy to Mesh; it must never be the reason a customer cannot
+ * pay, so a store outage lets the request through rather than blocking it.
+ */
 export async function underRateLimit(sid: string, max = 20): Promise<boolean> {
-  const n = await store().incr(`rate:${sid}`, RATE_TTL)
-  return n <= max
+  try {
+    const n = await store().incr(`rate:${sid}`, RATE_TTL)
+    return n <= max
+  } catch {
+    return true
+  }
+}
+
+/**
+ * Settlement lives in its own key, written only by the webhook and never touched by the browser.
+ *
+ * The order record has two writers doing read-modify-write with no compare-and-swap, so a webhook
+ * landing between the browser's read and its write was silently erased along with the whole
+ * reconciliation trail. One writer per fact removes the race rather than narrowing it.
+ */
+export type SettlementRecord = {
+  eventId: string
+  transferStatus: string
+  receivedAt: number
+  txHash?: string
+  transferId?: string
+}
+
+export async function putSettlement(orderId: string, record: SettlementRecord): Promise<void> {
+  await store().set(`settlement:${orderId}`, record, ORDER_TTL)
+}
+
+export async function getSettlement(orderId: string): Promise<SettlementRecord | null> {
+  return store().get<SettlementRecord>(`settlement:${orderId}`)
 }

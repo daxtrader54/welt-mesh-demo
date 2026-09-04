@@ -74,6 +74,12 @@ export type OrderState = {
   payment: PaymentDetail
   fees: FeeDetail
   failure: Failure | null
+  /**
+   * A problem that does not stop the payment. A failed balance read belongs here: the shopper can
+   * still pay, they just do not get to see their holdings first, so it must not take over the
+   * screen the way a `failure` does.
+   */
+  warning: Failure | null
   /** Every SDK event, in order, for the technical view. */
   log: { at: number; type: string; payload: unknown }[]
 }
@@ -111,6 +117,7 @@ export function initialOrderState(): OrderState {
     },
     fees: { institution: null, institutionCurrency: null, gas: null, client: null },
     failure: null,
+    warning: null,
     log: []
   }
 }
@@ -124,6 +131,8 @@ export type OrderEvent =
   | { type: 'settled'; at: number; txHash?: string | null }
   | { type: 'settlement:timeout'; at: number; reason: string }
   | { type: 'failed'; at: number; failure: Failure }
+  /** Dismiss a failure without discarding the trace, which is the interesting part after one. */
+  | { type: 'clear:failure' }
   | { type: 'reset' }
 
 function mark(steps: Step[], id: StepId, state: StepState, at: number, facts: Fact[] = []): Step[] {
@@ -147,7 +156,13 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
       return initialOrderState()
 
     case 'connect:started':
-      return { ...state, status: 'connecting', failure: null, steps: activate(state.steps, 'connected') }
+      return {
+        ...state,
+        status: 'connecting',
+        failure: null,
+        warning: null,
+        steps: activate(state.steps, 'connected')
+      }
 
     case 'holdings:done':
       return {
@@ -161,9 +176,12 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
       }
 
     case 'holdings:failed':
-      // Not fatal. The shopper can still pay, they just do not get to see holdings first.
+      // Not fatal, and now actually visible. Previously this wrote a manifest row and nothing
+      // else, so the shopper saw no explanation at all and the copy promising one was dead code.
       return {
         ...state,
+        status: state.status === 'connecting' ? 'connected' : state.status,
+        warning: action.failure,
         steps: mark(state.steps, 'holdings', 'failed', action.at, [
           { label: 'Reason', value: action.failure.detail ?? action.failure.title }
         ])
@@ -174,6 +192,13 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
 
     case 'failed':
       return { ...state, status: 'failed', failure: action.failure }
+
+    case 'clear:failure':
+      return {
+        ...state,
+        failure: null,
+        status: state.status === 'failed' ? (state.source ? 'connected' : 'draft') : state.status
+      }
 
     case 'settled':
       return {
@@ -201,10 +226,40 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
   }
 }
 
+/**
+ * What goes in the event log.
+ *
+ * `integrationConnected` carries the exchange's `accessToken` and `refreshToken`, and the log is
+ * rendered in the technical view and copied to the clipboard by the Copy log button. Redacting
+ * here rather than at the point of display means the renderer and the copy button cannot drift
+ * apart, and a credential cannot reach a projector or a paste buffer. The base64 logo blob is
+ * dropped at the same time because it is several kilobytes of noise.
+ */
+function redactPayload(event: LinkEventType): unknown {
+  if (!('payload' in event) || event.payload === null || event.payload === undefined) return null
+  if (event.type !== 'integrationConnected') return event.payload
+
+  const token = event.payload.accessToken
+  if (!token) return { redacted: 'no accessToken in payload' }
+
+  return {
+    brokerType: token.brokerType,
+    brokerName: token.brokerName,
+    expiresInSeconds: token.expiresInSeconds,
+    accountTokens: (token.accountTokens ?? []).map(t => ({
+      tokenId: t.tokenId ?? null,
+      accountName: t.account?.accountName ?? null,
+      accessToken: '[redacted before logging]',
+      refreshToken: t.refreshToken ? '[redacted before logging]' : undefined
+    })),
+    brokerBrandInfo: '[dropped: base64 logo]'
+  }
+}
+
 function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): OrderState {
   const next: OrderState = {
     ...state,
-    log: [...state.log, { at, type: event.type, payload: 'payload' in event ? event.payload : null }]
+    log: [...state.log, { at, type: event.type, payload: redactPayload(event) }]
   }
 
   switch (event.type) {
@@ -273,12 +328,17 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
           client: p.customClientFee?.fee ?? null
         },
         // Asset and network do not always fire their own events when Link picks them for you.
+        // `at: 0` keeps an existing timestamp. Mesh re-quotes every ~30s while the shopper sits on
+        // the confirm screen, and without this the asset and network rows creep forward on each
+        // requote until they read later than the row below them.
         steps: mark(
           mark(
-            mark(next.steps, 'asset', 'done', at, [{ label: 'Asset', value: p.symbol }]),
+            mark(next.steps, 'asset', 'done', already?.state === 'done' ? 0 : at, [
+              { label: 'Asset', value: p.symbol }
+            ]),
             'network',
             'done',
-            at,
+            already?.state === 'done' ? 0 : at,
             [{ label: 'Network', value: p.networkName ?? '—' }]
           ),
           'preview',
@@ -309,14 +369,42 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
       }
     }
 
+    /**
+     * Mesh's event reference marks `transferExecuted` "Do not use. Obsolete." and documents
+     * `transferInitiated` as the event for the shopper proceeding from the preview. So the row is
+     * stamped here, and `transferExecuted` below only fills in the transaction id it carries.
+     */
+    case 'transferInitiated':
+      return {
+        ...next,
+        steps: mark(next.steps, 'authorised', 'done', at, [
+          { label: 'Provider', value: event.payload.integrationName },
+          { label: 'Status', value: event.payload.status }
+        ])
+      }
+
+    case 'transferMfaRequired':
+      return { ...next, steps: activate(next.steps, 'authorised') }
+
     case 'transferExecuted':
       return {
         ...next,
         payment: { ...next.payment, txId: event.payload.txId },
-        steps: mark(next.steps, 'authorised', 'done', at, [
+        steps: mark(next.steps, 'authorised', 'done', 0, [
           { label: 'Status', value: event.payload.status },
           { label: 'Transaction', value: event.payload.txId }
         ])
+      }
+
+    /** A wallet that timed out or connected the wrong address. Otherwise this is silent. */
+    case 'defiWalletError':
+      return {
+        ...next,
+        status: 'failed',
+        failure: failure('connect_failed', {
+          title: `${event.payload.integrationName} could not be used`,
+          detail: `${event.payload.errorType}: ${JSON.stringify(event.payload.details)}`
+        })
       }
 
     case 'transferCompleted': {

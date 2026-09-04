@@ -141,7 +141,7 @@ export function Receipt({
             )}
             <p className="note mt-3">
               Two different fees. The exchange charges the withdrawal and Mesh quotes it in the
-              payment preview. The handling fee is the merchant own charge, sent to Mesh as
+              payment preview. The handling fee is the merchant&apos;s own charge, sent to Mesh as
               clientFee on the link token, as a proportion of the order amount.
             </p>
             <p className="note mt-2">

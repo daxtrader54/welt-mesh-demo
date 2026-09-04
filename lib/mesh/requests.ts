@@ -41,9 +41,10 @@ export type PaymentTokenInput = {
 /** Mesh wants `clientFee` as a 0-1 proportion of the amount, not a cash figure. */
 export function clientFeeRatio(fee: number, amount: number): number {
   if (!fee || !amount || fee <= 0) return 0
-  // Guard the upper bound: Mesh rejects anything outside 0-1, and a fee larger than the order
-  // is a configuration mistake rather than something to pass along.
-  return Math.min(fee / amount, 1)
+  // A fee larger than the order is a configuration mistake. Clamping it to 1 would silently
+  // double what the customer pays, so it is refused instead.
+  if (fee >= amount) return 0
+  return fee / amount
 }
 
 export type LinkTokenBody = Record<string, unknown>

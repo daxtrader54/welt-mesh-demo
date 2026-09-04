@@ -47,11 +47,19 @@ export async function GET() {
     const json = (await capable.json()) as { content?: { integrations?: MeshIntegration[] } }
     const integrations = json.content?.integrations ?? []
 
+    /**
+     * This endpoint returns its list under `content.items`, unlike `transfers/managed/integrations`
+     * which uses `content.integrations`. Reading the wrong key silently produced an empty set, so
+     * every provider read as unavailable and the panel labelled sandbox Coinbase "production only".
+     *
+     * Matched on `type`, not `name`: three entries share the name "Coinbase" and only
+     * `sandboxCoinbase` is the one with a test account.
+     */
     const offeredJson = offered.ok
-      ? ((await offered.json()) as { content?: { integrations?: { id: string; name?: string; type?: string }[] } })
+      ? ((await offered.json()) as { content?: { items?: { id: string; name?: string; type?: string }[] } })
       : null
-    const offeredNames = new Set(
-      (offeredJson?.content?.integrations ?? []).map(i => (i.name ?? i.type ?? '').toLowerCase())
+    const offeredTypes = new Set(
+      (offeredJson?.content?.items ?? []).map(i => (i.type ?? '').toLowerCase()).filter(Boolean)
     )
 
     const providers = integrations.map(i => {
@@ -68,7 +76,7 @@ export async function GET() {
         type: i.type,
         canPay,
         // Whether Link will actually put this in front of the shopper on this environment.
-        sandboxAvailable: offeredNames.has((i.name ?? i.type).toLowerCase()),
+        sandboxAvailable: offeredTypes.has(i.type.toLowerCase()),
         // Why not, in the provider's own terms. Self-custody wallets are testnet-only in sandbox.
         reason: canPay
           ? null
