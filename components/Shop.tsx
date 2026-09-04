@@ -27,7 +27,7 @@ import {
   type Address
 } from './Delivery'
 import { FundingNote } from './FundingPicker'
-import { FailureNotice, Footer, SandboxNotice } from './Notices'
+import { FailureNotice, Footer } from './Notices'
 import { FundingSource, Manifest, type Funding } from './PaymentRoute'
 import { Portfolio, type AssetFunding, type Position, type Quote } from './Portfolio'
 import { PretendPaymentModal } from './PretendPayment'
@@ -1155,13 +1155,19 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                     >
                       {linkOpen && (
                         <>
-                          {/* The credential warning has to be here, not behind the iframe. This is
-                              the exact moment Mesh shows a login form, and it is the moment real
-                              exchange credentials get typed into a sandbox by mistake. */}
-                          <div className="p-3">
-                            <SandboxNotice compact />
+                          {/* One line, on the bar Mesh's own frame sits under. The credentials
+                              have to be readable at the exact moment Mesh asks for them, which is
+                              also the moment someone types real ones in by mistake. That is worth a
+                              line and not the bordered warning panel it used to be. */}
+                          <div className="rule-b px-4 py-2">
+                            <span className="note">
+                              Mesh sandbox, never real credentials ·{' '}
+                              <span className="data text-ink">Mesh</span> ·{' '}
+                              <span className="data text-ink">Pass123</span> ·{' '}
+                              <span className="data text-ink">123456</span>
+                            </span>
                           </div>
-                          <div className="rule-t rule-b flex items-center justify-between px-4 py-2.5">
+                          <div className="rule-b flex items-center justify-between px-4 py-2.5">
                             <span className="label">Secure payment</span>
                             <span className="label">Powered by Mesh</span>
                           </div>
