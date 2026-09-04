@@ -275,6 +275,18 @@ export function TechnicalView({
                 onIntegrationConnected. It is posted to the server immediately and never sent back
                 down. Masked here so you can see one arrived, not what it is.
               </p>
+
+              <div className="rule-t mt-5 pt-4">
+                <div className="label mb-2">Taking a merchant fee</div>
+                <p className="note">
+                  Mesh supports a merchant cut as `clientFee` on the link token, given as a
+                  proportion of the order rather than a cash figure. It is wired up and tested
+                  here, and set to zero: a $50 shop that charges $52 either advertises the wrong
+                  price or reveals the fee at the last step, and the second one is drip pricing.
+                  Set NEXT_PUBLIC_MERCHANT_HANDLING_FEE to see it flow through the bag, the
+                  checkout and the receipt.
+                </p>
+              </div>
             </div>
           </>
         )}
