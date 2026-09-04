@@ -26,7 +26,7 @@ import { ProductPanels } from './Reviews'
 import { ShopFront } from './ShopFront'
 import { Receipt } from './Receipt'
 import { ConsoleBar, TechnicalView, type ConnectionSummary, type ServerCall } from './TechnicalView'
-import { useMeshLink } from './useMeshLink'
+import { LINK_FRAME_ID, useMeshLink } from './useMeshLink'
 
 /**
  * The shop: product, bag, checkout, confirmation.
@@ -66,6 +66,8 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
   const [orderId, setOrderId] = useState<string | null>(null)
   const [calls, setCalls] = useState<ServerCall[]>([])
   const [drawer, setDrawer] = useState(false)
+  /** True while Mesh Link is on screen, so the checkout makes room for it. */
+  const [linkOpen, setLinkOpen] = useState(false)
 
   const colourway = findColourway(colourwayId)
   /** True when what is on screen is exactly what is already in the bag. */
@@ -194,7 +196,8 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
     onOpening: info => {
       note('POST /api/mesh/link-token', 'POST /api/v1/linktoken', info.ms, true)
       if (info.orderId) setOrderId(info.orderId)
-    }
+    },
+    onVisibilityChange: setLinkOpen
   })
 
   const addToBag = useCallback(() => {
@@ -232,8 +235,28 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
     let attempts = 0
     let cancelled = false
 
+    const explain = async () => {
+      try {
+        const health = await fetch('/api/health').then(r => r.json())
+        if (!health?.config?.optional?.webhookSecret) {
+          return 'no webhook secret set on this deployment'
+        }
+        if (health?.storage !== 'redis') {
+          return 'no shared store, so the webhook cannot reach this page'
+        }
+      } catch {
+        // Health is a nicety here. If it is unreachable, fall through to the generic reason.
+      }
+      return 'nothing received yet; sandbox does not guarantee delivery'
+    }
+
     const tick = async () => {
-      if (cancelled || attempts >= 12) return
+      if (cancelled) return
+      if (attempts >= 12) {
+        const reason = await explain()
+        if (!cancelled) dispatch({ type: 'settlement:timeout', at: Date.now(), reason })
+        return
+      }
       attempts += 1
       try {
         const res = await fetch(`/api/orders/${orderId}`)
@@ -372,12 +395,12 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
 
               {/* Explicit grid placement, because mobile stacks in DOM order. The first pass put
                   the entire spec sheet between the photograph and the price. */}
-              <main className="grid gap-x-16 gap-y-10 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
+              <main className="grid items-start gap-x-16 gap-y-10 py-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
                 <section className="lg:col-start-1 lg:row-start-1">
                   <ProductPlate colourway={colourwayId} plate={plate} onPlateChange={setPlate} />
                 </section>
 
-                <section className="flex flex-col gap-7 lg:col-start-2 lg:row-start-1">
+                <section className="flex flex-col gap-7 lg:col-start-2 lg:row-span-2 lg:row-start-1">
                   <div>
                     <p className="label mb-2">{PRODUCT.brand}</p>
                     <h1 className="text-[2.4rem] font-bold leading-[0.95] tracking-[-0.03em] sm:text-[2.6rem]">
@@ -492,7 +515,7 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
               <section className="order-1 flex flex-col gap-7 lg:order-none lg:col-start-2 lg:row-start-1">
                 {step === 'checkout' && !paid && (
                   <>
-                    <div>
+                    <div className={linkOpen ? 'hidden' : undefined}>
                       <h1 className="text-[2rem] font-bold leading-[1] tracking-[-0.02em]">
                         How would you like to pay?
                       </h1>
@@ -518,7 +541,7 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
                       </dl>
                     </div>
 
-                    {order.failure && (
+                    {order.failure && !linkOpen && (
                       <FailureNotice
                         failure={order.failure}
                         onRetry={
@@ -533,7 +556,7 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
                       />
                     )}
 
-                    {!connected && !order.failure && (
+                    {!connected && !order.failure && !linkOpen && (
                       <>
                         <div className="space-y-2">
                           {[
@@ -582,7 +605,7 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
                       </>
                     )}
 
-                    {connected && !order.failure && (
+                    {connected && !order.failure && !linkOpen && (
                       <>
                         <FundingSource
                           funding={funding}
@@ -599,6 +622,26 @@ export function Shop({ demoMode }: { demoMode: boolean }) {
                         <SandboxNotice compact />
                       </>
                     )}
+                    <div
+                      className={
+                        linkOpen ? 'stamp border border-rule bg-plate' : 'h-0 overflow-hidden'
+                      }
+                      aria-hidden={!linkOpen}
+                    >
+                      {linkOpen && (
+                        <div className="rule-b flex items-center justify-between px-4 py-2.5">
+                          <span className="label">Secure payment</span>
+                          <span className="label">Powered by Mesh</span>
+                        </div>
+                      )}
+                      <iframe
+                        id={LINK_FRAME_ID}
+                        title="Mesh Link"
+                        className="w-full border-0"
+                        style={{ height: linkOpen ? 620 : 0, display: 'block' }}
+                        allow="clipboard-write; camera"
+                      />
+                    </div>
                   </>
                 )}
 
