@@ -29,7 +29,7 @@ import {
 import { FundingNote } from './FundingPicker'
 import { FailureNotice, Footer, SandboxNotice } from './Notices'
 import { FundingSource, Manifest, type Funding } from './PaymentRoute'
-import { Portfolio, type Position, type Quote } from './Portfolio'
+import { Portfolio, type AssetFunding, type Position, type Quote } from './Portfolio'
 import { PretendPaymentModal } from './PretendPayment'
 import { ProductPlate } from './ProductPlate'
 import { ProductPanels } from './Reviews'
@@ -121,6 +121,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const [cryptoValue, setCryptoValue] = useState<number | null>(null)
   /** Mesh's per-asset answer on what can actually pay. Null until it has been asked. */
   const [quotes, setQuotes] = useState<Quote[] | null>(null)
+  /** Mesh's per-holding answer for this account, from configure. Null when it could not be asked. */
+  const [assetFunding, setAssetFunding] = useState<AssetFunding[] | null>(null)
   /** Which asset the shopper picked. Decides the single destination sent to Mesh. */
   const [asset, setAsset] = useState<string | null>(null)
 
@@ -187,6 +189,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     setFunding(null)
     setPositions([])
     setQuotes([])
+    setAssetFunding(null)
     setPickedIntegrationId(null)
     try {
       await fetch('/api/mesh/connection', { method: 'DELETE' })
@@ -257,6 +260,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           note('GET /api/mesh/quotes', 'POST /api/v1/transfers/managed/quote', Date.now() - qStarted, qjson.ok)
           if (!qjson.ok) return setQuotes([])
           setQuotes(qjson.quotes)
+          setAssetFunding(qjson.funding ?? null)
           // Default to the first thing that can actually pay, preferring the settlement asset.
           const best =
             qjson.quotes.find((q: Quote) => q.eligible && q.primary) ??
@@ -1084,6 +1088,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                             positions={positions}
                             cryptoValue={cryptoValue}
                             quotes={quotes}
+                            funding={assetFunding}
                             selected={asset}
                             onSelect={setAsset}
                           />

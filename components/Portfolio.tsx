@@ -36,6 +36,14 @@ export type Quote = {
   funding: { type: string; method: string | null }[]
 }
 
+/** Mesh's per-holding answer for this account, from transfers/managed/configure. */
+export type AssetFunding = {
+  symbol: string
+  eligible: boolean
+  eligibleWithFunding: boolean
+  reason: string | null
+}
+
 /** Mesh's reason codes, in the shopper's words. */
 const REASONS: Record<string, string> = {
   balanceBelowRequestedAmount: 'not enough of it',
@@ -74,6 +82,7 @@ export function Portfolio({
   positions,
   cryptoValue,
   quotes,
+  funding,
   selected,
   onSelect
 }: {
@@ -83,6 +92,11 @@ export function Portfolio({
   cryptoValue: number | null
   /** Null while the quotes are still being fetched. */
   quotes: Quote[] | null
+  /**
+   * Mesh's answer for this account, per holding. Null when the call failed, which means unknown
+   * and is rendered as silence rather than as a refusal.
+   */
+  funding: AssetFunding[] | null
   selected: string | null
   onSelect: (symbol: string) => void
 }) {
@@ -200,8 +214,15 @@ export function Portfolio({
 
           <ul className="mt-3">
             {rest.slice(0, 12).map(p => {
-              const q = quoteFor(p.symbol)
-              const why = q?.reason ? REASONS[q.reason] ?? q.reason : null
+              /**
+               * Mesh's verdict for this account, not ours and not the quote's. `eligible` means it
+               * can be sent as it stands; `eligibleWithFunding` means Mesh would convert it to pay.
+               * Either way this asset can buy the shoes, which is the whole argument and was
+               * previously being denied on no evidence at all.
+               */
+              const f = funding?.find(x => x.symbol === p.symbol)
+              const canPay = Boolean(f && (f.eligible || f.eligibleWithFunding))
+              const why = f?.reason ? REASONS[f.reason] ?? f.reason : null
               return (
                 <li
                   key={p.symbol}
@@ -209,7 +230,13 @@ export function Portfolio({
                 >
                   <span className="data w-16 shrink-0 text-xs font-medium">{p.symbol}</span>
                   <span className="note min-w-0 flex-1 truncate">{p.name}</span>
-                  {why && <span className="note shrink-0">{why}</span>}
+                  {canPay ? (
+                    <span className="note shrink-0" style={{ color: 'var(--plate-accent)' }}>
+                      {f!.eligible ? 'can pay' : 'can pay, converted'}
+                    </span>
+                  ) : (
+                    why && <span className="note shrink-0">{why}</span>
+                  )}
                   <span className="data shrink-0 text-xs">{usd(p.marketValue)}</span>
                 </li>
               )
