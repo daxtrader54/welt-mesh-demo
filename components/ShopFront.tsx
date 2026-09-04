@@ -9,6 +9,7 @@ import {
   SAVING,
   SAVING_PERCENT,
   SIZE_RUN,
+  SPEC,
   plateSrc,
   type ColourwayId
 } from '@/lib/product'
@@ -144,23 +145,66 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
         End of run, so once a size is gone it is gone. Order before 3pm for same day dispatch.
       </p>
 
-      <div className="rule-t mt-10 grid gap-6 pt-6 sm:grid-cols-3">
-        {[
-          ['Free delivery', 'On every order, no minimum'],
-          ['30 day returns', 'Unworn, in the original box'],
-          ['Pay from anywhere', 'Card, Apple Pay, or an exchange account you already hold']
-        ].map(([title, body]) => (
-          <div key={title}>
-            <div className="label mb-1">{title}</div>
-            <p className="note">{body}</p>
-          </div>
-        ))}
-      </div>
+      {/**
+       * A spec sheet, not a feature grid.
+       *
+       * This band was three columns of label and sentence, which is the exact shape the brief rules
+       * out and, worse, said almost nothing: two of the three were delivery terms every shop has.
+       * The design language here is a technical drawing plate, so the honest version of a trust
+       * band is the specification itself, numbered to match the callouts on the product page, with
+       * the terms beside it as a compact table rather than a column of prose.
+       */}
+      <div className="rule-t mt-12 grid gap-x-16 gap-y-10 pt-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+        <div>
+          <div className="label mb-4">Specification</div>
+          <dl>
+            {SPEC.map(spec => (
+              <div
+                key={spec.n}
+                className="rule-b flex items-baseline gap-4 py-2.5 first:border-t first:border-rule first:pt-2.5"
+                style={{ borderTopColor: 'var(--color-rule)' }}
+              >
+                <span className="data w-7 shrink-0 text-xs text-faint">{spec.n}</span>
+                <dt className="w-28 shrink-0 text-sm font-medium">{spec.label}</dt>
+                <dd className="note min-w-0 flex-1">{spec.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="note mt-4">
+            Every image on this page is a real photograph of the product, and the references are the
+            supplier&apos;s own. One shoe in four colours, because that is what a clearance drop is.
+          </p>
+        </div>
 
-      <p className="note mt-8">
-        Every image here is a real photograph of the product. There is one shoe in this shop, in
-        four colours, because that is what a clearance drop looks like.
-      </p>
+        <div>
+          <div className="label mb-4">Delivery, returns and payment</div>
+          <dl>
+            {[
+              ['Delivery', 'Free, 2 to 4 days', 'No minimum spend'],
+              ['Dispatch', 'Same day', 'Ordered before 3pm'],
+              ['Returns', '30 days', 'Unworn, in the original box'],
+              ['Card', 'Visa, Mastercard, Amex', 'Plus Apple Pay'],
+              [
+                'Crypto',
+                `Settles in ${PRODUCT.settlement.symbol}`,
+                'From an exchange account you already hold'
+              ]
+            ].map(([k, v, note]) => (
+              <div
+                key={k}
+                className="rule-b py-2.5 first:border-t first:border-rule first:pt-2.5"
+                style={{ borderTopColor: 'var(--color-rule)' }}
+              >
+                <div className="flex items-baseline justify-between gap-4">
+                  <dt className="text-sm font-medium">{k}</dt>
+                  <dd className="data text-right text-sm">{v}</dd>
+                </div>
+                <div className="note">{note}</div>
+              </div>
+            ))}
+          </dl>
+        </div>
+      </div>
     </div>
   )
 }
