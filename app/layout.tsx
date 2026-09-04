@@ -17,10 +17,47 @@ const plexMono = IBM_Plex_Mono({
   weight: ['400', '500', '600']
 })
 
+/**
+ * The title says mocked up on purpose.
+ *
+ * This is a demonstration store that takes real payments against Mesh's sandbox, and the two
+ * halves of that sentence are easy to confuse from the outside. Someone who finds the tab in a
+ * browser history, a shared link or a screenshot should be able to tell it is not a shop without
+ * having to open it. The same reasoning drives `noindex`: nothing here should ever turn up in a
+ * search result next to real retailers, and the shoe is a real Skechers product listed by a
+ * fictional retailer.
+ */
+const DESCRIPTION =
+  `A mocked up single-product shoe shop, built to demonstrate Mesh. Pay $${PRODUCT.price} for the ` +
+  `${PRODUCT.brand} ${PRODUCT.name} in ${PRODUCT.settlement.symbol} on ` +
+  `${PRODUCT.settlement.network}, funded from an exchange account you already hold. Runs against ` +
+  `the Mesh sandbox: no real account, no real money, and no orders are fulfilled.`
+
 export const metadata: Metadata = {
-  title: `${BRAND} — ${PRODUCT.brand} ${PRODUCT.name}`,
-  description: `Pay for the ${PRODUCT.brand} ${PRODUCT.name} in ${PRODUCT.settlement.symbol} from an account you already hold.`,
-  robots: { index: false, follow: false }
+  title: `${BRAND} - Mocked Up Mini Shoe Shop`,
+  description: DESCRIPTION,
+  applicationName: BRAND,
+  /**
+   * Belt and braces. The meta tag covers the rendered page; the `X-Robots-Tag` header in
+   * `next.config.ts` covers everything else a crawler can reach, including the API routes, and
+   * `app/robots.ts` refuses the whole origin before either is read.
+   */
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false, noimageindex: true }
+  },
+  openGraph: {
+    title: `${BRAND} - Mocked Up Mini Shoe Shop`,
+    description: DESCRIPTION,
+    siteName: BRAND,
+    type: 'website',
+    locale: 'en_GB'
+  },
+  // No image on purpose. An unfurled product photograph in a Slack thread is exactly the thing
+  // that makes a demonstration store read as a real one.
+  twitter: { card: 'summary', title: `${BRAND} - Mocked Up Mini Shoe Shop`, description: DESCRIPTION }
 }
 
 export const viewport: Viewport = {
