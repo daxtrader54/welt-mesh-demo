@@ -1,105 +1,146 @@
 # WELT
 
-A single-product shoe shop where the checkout is powered by [Mesh](https://www.meshpay.com).
+A single-product shoe shop where the checkout runs on [Mesh](https://www.meshpay.com).
 
-You pick a size, hit pay, connect a Coinbase account, see what you actually hold, and pay $50 in
-USDC on Ethereum. Underneath there is a second layer that shows what really happened: the real
-Mesh event stream, the routes this app has, and the order record.
+**Live: https://welt-mesh-demo.vercel.app**
+
+You pick a size, add to bag, check out, connect an exchange account, see what you actually hold,
+choose which stablecoin to pay with, and pay. Underneath there is a second layer showing what really
+happened: every Mesh event with its payload, the routes that produced them, and the reasoning behind
+the whole thing.
 
 The point is not that an API call works. It is that the customer never copied an address, never
 withdrew anything, and never had to find out what the merchant accepts. Mesh sat in the middle and
 did it.
 
 Built to be shown by a Solutions Architect to a merchant, so the two questions it is designed to
-answer are "would my customers use this" and "how do I know I got paid".
-
----
-
-## Contents
-
-- [What it does](#what-it-does)
-- [Architecture](#architecture)
-- [The Mesh integration](#the-mesh-integration)
-- [For the merchant's engineer](#for-the-merchants-engineer)
-- [Local setup](#local-setup)
-- [Sandbox](#sandbox)
-- [Deployment](#deployment)
-- [Security](#security)
-- [Failure handling](#failure-handling)
-- [Technical decisions](#technical-decisions)
-- [Testing](#testing)
-- [What is deliberately not here](#what-is-deliberately-not-here)
+answer are *would my customers use this* and *how do I know I got paid*.
 
 ---
 
 ## What it does
 
 WELT is a fictional clearance retailer listing one real product, a Skechers Sport Track Syntac, in
-four colourways at $50. It is not affiliated with Skechers or with MandM Direct, where the product
-images and the listing structure came from, and no orders are fulfilled.
+four colourways at $50. Not affiliated with Skechers or MandM Direct, where the photographs and the
+listing structure came from. No orders are fulfilled.
 
-The journey is an ordinary shop funnel with Mesh at the end of it:
+1. **Listing.** Four colourways, which are four real SKUs with their own supplier references.
+2. **Product.** Colour, size, add to bag. Reviews, delivery and spec, as a shop has.
+3. **Bag.** Line item, summary, savings off RRP, checkout securely.
+4. **Checkout.** Card and Apple Pay open real-looking sheets that then say they are for show. The
+   crypto option opens a Mesh Link session that connects an account and stops.
+5. **Portfolio.** Everything in the connected account, with Mesh's own answer on which of it can pay
+   for this order and where the money would come from. Pick one.
+6. **Pay.** A second Link session carries the payment, deep-linked to the account already connected
+   so nobody is asked to choose twice. **Change account** puts the picker back.
+7. **Confirmation.** The receipt prints, the bag empties, the product says *Yours*. A verified
+   webhook later upgrades **paid** to **settled**.
 
-1. **Product.** Pick a colourway and a size, add to bag.
-2. **Bag.** Line item, summary, savings off RRP, checkout securely.
-3. **Checkout.** Card, Apple Pay and a crypto account. The first two open real-looking sheets and
-   then say they are for show. The third opens a Mesh Link session that connects an account and
-   stops.
-4. The page reads that account's real holdings and shows what you hold against what this costs.
-5. **Pay.** A second Link session carries the payment, deep-linked to the account you already
-   connected so you are not asked to choose twice. **Change account** puts the picker back.
-6. The receipt prints and the bag empties. A verified webhook later upgrades paid to settled.
+Alongside it, a payment trace: seven rows, each stamped by a real Mesh event with the time it
+arrived. Nothing runs on a timer, so a row that stays blank is a step that genuinely did not happen.
 
-Running alongside is a manifest: seven rows, each stamped by a real SDK event with the time it
-arrived. Nothing is on a timer. A row whose event never fires stays visibly blank.
+---
+
+## Running it
+
+Node 22.12 or newer. Built and deployed on Node 24. Earlier 22.x and odd-numbered majors fail
+`npm test`, because vitest requires `^22.12 || ^24 || >=26`.
+
+```bash
+npm install
+cp .env.example .env.local     # fill in the two Mesh values
+npm run dev
+```
+
+**You need a Mesh sandbox Client ID and API key.** Without them the app starts and every route
+returns a named configuration error, which `/api/health` spells out. To see it working without
+credentials, use the deployment above.
+
+**Register your domain before the first run.** Mesh dashboard, Account > Get your API keys > Allowed
+Link URLs, add `http://localhost:3000`. Mesh validates the origin the Link popup was opened from and
+an unregistered domain fails to render *with no console error*. Changes take up to ten minutes. This
+is the most common reason a first run shows a blank grey box, and the app now detects it: if no SDK
+event arrives within twelve seconds it says so and names the domain to register.
+
+| Variable | Required | Where it comes from |
+|---|---|---|
+| `MESH_CLIENT_ID` | yes | Dashboard, Account > Get your API keys, top right |
+| `MESH_API_KEY` | yes | Same page, Sandbox keys. Shown once at generation |
+| `MESH_API_BASE_URL` | yes | `https://sandbox-integration-api.meshconnect.com` |
+| `MERCHANT_ADDRESS` | yes | The destination wallet |
+| `MERCHANT_NETWORK_ID` | yes | Ethereum, `e3c7fdd8-b1fc-4e51-85ae-bb276e075611` |
+| `MESH_WEBHOOK_SECRET` | no | **Sandbox** Transfer Webhook Callback URI. Shown once. Without it settlement never arrives |
+| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | no | Upstash directly. Without a store, settlement cannot reach the browser on serverless |
+| `KV_REST_API_URL` / `_TOKEN` | no | What the Vercel Marketplace Upstash integration sets instead. Either pair works; set one, not both |
+| `MESH_COINBASE_INTEGRATION_ID` | no | Blank shows Mesh's picker, which is the default. Set it to open Link straight on one provider |
+| `NEXT_PUBLIC_MERCHANT_HANDLING_FEE` | no | Merchant fee in dollars, sent as Mesh's `clientFee`. `0` by default, and see Decisions for why |
+
+`?demo=1` opens the technical panel docked. `Ctrl/Cmd + Shift + D` toggles it. `/api/health` reports
+which variables are present, without values, and whether the store is Redis or memory.
+
+### Scripts
+
+```bash
+npm test                                    # 62 tests, no secrets, under a second
+npm run typecheck
+node scripts/webhook-check.mjs <url>        # prove the webhook endpoint without waiting for Mesh
+node scripts/crop-product-images.mjs        # re-frame the photographs from public/product-src
+```
 
 ---
 
 ## Architecture
 
 ```
-Browser ──► Next.js route handlers ──► Mesh sandbox API
-   ▲                  │
-   │                  ▼
-   │              Upstash Redis
-   │                  ▲
-   └── polls order    │
-                 Mesh webhook (signed)
+Browser ──────────────► Next.js route handlers ──────────► Mesh sandbox API
+   │  │                          │                              ▲
+   │  └── Mesh Link iframe ──────┼──────────────────────────────┘
+   │      (direct, hence the CSP)│
+   │                             ▼
+   │                        Upstash Redis
+   │                             ▲
+   └── polls the order ──────────┴──── Mesh webhook (signed, server to server)
 ```
 
-The client secret exists only inside route handlers. The browser receives a Link token and
-normalised, redacted data, and nothing else.
+The browser talks to Mesh twice over: through our routes, and directly through the Link iframe. That
+second edge is why the CSP allows `*.meshconnect.com` in `frame-src` and `connect-src`, and it is
+why the exchange auth token reaches client JavaScript at all.
 
 ```
 app/
-  page.tsx                        the shop
-  api/mesh/link-token/route.ts    mints connect and payment tokens
-  api/mesh/connection/route.ts    takes custody of the auth token
-  api/mesh/portfolio/route.ts     holdings, normalised for the page
-  api/mesh/webhook/route.ts       raw body, HMAC, idempotent settlement
-  api/mesh/providers/route.ts     who could fund this payment
-  api/orders/[id]/route.ts        order state, read and update
-  api/session/reset/route.ts      start the demo again
-  api/health/route.ts             config presence, no values
+  page.tsx                     the shop, one route, five internal steps
+  error.tsx  not-found.tsx     branded failure and 404
+  api/mesh/link-token          mints connect and payment tokens
+  api/mesh/connection          takes custody of the auth token; reports an existing one
+  api/mesh/portfolio           holdings, normalised
+  api/mesh/quotes              per-asset eligibility, fees and funding sources
+  api/mesh/providers           who could fund this, and who Link will offer
+  api/mesh/webhook             raw body, HMAC, idempotent settlement
+  api/orders/[id]              order state, owned by the session that created it
+  api/session/reset            clears the order, keeps the connection
+  api/health                   config presence, no values
 lib/
-  mesh/        client, request builders, schemas, webhook verification
-  order/       the event reducer that drives the manifest and receipt
-  store/       Redis with a memory fallback, TTLs on everything
-components/    shop, plate, checkout, manifest, receipt, technical view
+  mesh/     client, request builders, provider mapping, schemas, webhook verification
+  order/    the event reducer that drives the manifest and the receipt
+  store/    Redis with a memory fallback, TTLs on everything
+components/ shop, listing, plate, checkout, portfolio, bag, receipt, technical panel
+scripts/    webhook-check, crop-product-images
 ```
 
-Everything runs on the Node runtime, not edge. `crypto.createHmac` needs it and the Mesh calls are
+Nine route handlers. Six are the integration; `orders`, `health` and `reset` exist for the demo.
+Everything runs on the Node runtime, not edge: `crypto.createHmac` needs it and the Mesh calls are
 simpler there.
 
 ---
 
 ## The Mesh integration
 
-Four calls, all server side, all with `X-Client-Id` and `X-Client-Secret`.
+Six endpoints, all server side, all with `X-Client-Id` and `X-Client-Secret`.
 
 ### Link token
 
-`POST /api/v1/linktoken`, twice, in two different shapes.
+`POST /api/v1/linktoken`, in two shapes. Tokens last ten minutes and are single use, so they are
+minted on the click and never on page load.
 
 **Connect** carries no transfer options, so Link connects the account and stops. This is the only
 way to read holdings before asking anyone to pay.
@@ -108,168 +149,340 @@ way to read holdings before asking anyone to pay.
 {
   "userId": "welt-<session>",
   "restrictMultipleAccounts": false
-  // optional integrationId opens Link straight on one provider instead of the picker
+  // accessTokens go to createLink, not here, so a returning shopper skips the login
 }
 ```
 
-**Payment** carries the transaction, deep-linked to the account the shopper already connected,
-because being shown the same picker twice in one checkout is confusing. The integration id comes
-from the connect session's exit summary. Dropping it restores the picker, which is what the
-**Change account** link does.
+**Payment** carries the transaction, deep-linked to the account already connected. The integration id
+comes from the connect session's exit summary.
 
 ```jsonc
 {
   "userId": "welt-<session>",
   "restrictMultipleAccounts": true,
+  "integrationId": "<the one they just connected>",
   "transferOptions": {
-    "transactionId": "WELT-0042",        // comes back as clientTransactionId on every event
+    "transactionId": "<uuid>",           // comes back on the webhook as TransactionId
     "transferType": "payment",
-    "isInclusiveFeeEnabled": false,      // fees sit on top, destination receives the full 50
-    "clientFee": 0.04,                   // the merchant's own $2, as a ratio of the amount
-    "toAddresses": [{
-      "networkId": "e3c7fdd8-b1fc-4e51-85ae-bb276e075611",
-      "symbol": "USDC",
-      "address": "0x0Ff0000f0A0f0000F0F000000000ffFf00f0F0f0",
-      "amount": 50,
-      "displayAmountInFiat": 50
-    }]
+    "isInclusiveFeeEnabled": false,      // fees sit on top; the destination receives the full 50
+    "generatePayLink": false,
+    "toAddresses": [                     // the asset they chose, or all three if they chose none
+      { "networkId": "e3c7…", "symbol": "USDC", "address": "0x0Ff0…", "amount": 50, "displayAmountInFiat": 50 }
+    ]
   }
 }
 ```
 
-`amount` and `amountInFiat` are mutually exclusive on a payment. Tokens last ten minutes and are
-single use, so they are minted on the click and never on page load.
+`amount` and `amountInFiat` are mutually exclusive on a payment. `clientFee`, when set, is a 0-1
+ratio of the amount rather than a cash figure, verified against the sandbox, which rejects `2` with
+*"The field ClientFee must be between 0 and 1"*.
 
 ### The SDK
 
 `@meshconnect/web-link-sdk@3.12.0`, imported dynamically inside the click because it touches
-`window` at module scope and a static import breaks the server render.
+`window` at module scope, and preloaded when the shopper reaches checkout so the click does not pay
+for a 105KB download.
 
-Four callbacks are used. `onIntegrationConnected` for the auth token, `onTransferFinished` for the
-settled payload, `onExit` for the session summary, and `onEvent` for everything else.
+Rendered **embedded** above 1024px, into an iframe the page owns inside the checkout column, so
+paying happens in the shop rather than on top of it. Below that it renders as an **overlay**: on a
+375px viewport the embedded frame loaded, fired `pageLoaded`, and then showed white, because Link's
+layout needs more width than a phone's checkout column gives it.
 
-### Events we act on, and why
+`onIntegrationConnected` for the auth token, `onTransferFinished` for the settled payload, `onExit`
+for the session summary and to close the session, `onEvent` for everything else.
+
+### Events acted on
 
 | Event | What it drives |
 |---|---|
-| `integrationConnected` | Connection state, provider name, the auth token handoff |
+| `integrationSelected` | Names the provider before a connection exists, so a failed Binance login does not report Coinbase |
+| `integrationConnected` | Connection state, provider, the auth token handoff |
 | `transferStarted` | Marks the funding source |
 | `transferAssetSelected`, `transferNetworkSelected` | Manifest rows |
-| `transferPreviewed` | Price, fee breakdown, preview id, and the source Mesh actually priced against |
-| `transferExecuted` | Transaction id |
+| `transferPreviewed` | Price, fees, preview id, and the source Mesh actually priced against. Fires repeatedly as Mesh re-quotes, so the row keeps its first timestamp and counts requotes |
+| `transferMfaRequired` | Marks the authorisation step active |
+| `transferInitiated` | Stamps *payment authorised*. Mesh's reference marks `transferExecuted` obsolete, so that only fills in the transaction id |
 | `transferCompleted` | Receipt: hash, transfer id, refund address, total charged |
 | `transferNoEligibleAssets` | Says what the account actually holds, from `arrayOfTokensHeld` |
-| `connectionDeclined`, `connectionUnavailable`, `integrationConnectionError` | Designed connection failures |
+| `connectionDeclined`, `connectionUnavailable`, `integrationConnectionError`, `defiWalletError` | Designed connection failures |
 | `transferPreviewError`, `transferExecutionError`, `transferConfigureError`, `transferDeclined` | Designed payment failures with the real message and `requestId` |
-| `close` | `SessionSummary.page` tells us where someone bailed, so "cancelled while signing in" replaces a shrug |
 
-Everything else is recorded in the technical view and acted on by nothing. Handling every event
-for completeness would be noise.
+Everything else is recorded and acted on by nothing. The panel says how many of the SDK's 43 event
+types have fired, so a low count reads as *this flow does not use them* rather than as filtering.
 
-### Portfolio
+### Portfolio and quotes
 
-`POST /api/v1/holdings/get` with `{ authToken, type, includeMarketValue: true }`, and
-`POST /api/v1/holdings/value` for the total.
+`POST /api/v1/holdings/get` with `{ authToken, type, includeMarketValue: true }` and
+`POST /api/v1/holdings/value` for the crypto total. `type` is the `brokerType` from the connect
+payload, never a hardcoded `"coinbase"`. The sandbox returns `sandboxCoinbase` and `sandbox`, and
+neither is in the SDK's published `BrokerType` union.
 
-`type` is the `brokerType` from the connect payload, not a hardcoded `"coinbase"`. The sandbox
-returns `sandboxCoinbase` and `sandbox`, and passing the wrong one fails.
+Then `POST /api/v1/transfers/managed/quote` per accepted asset. It returns `isEligible`, a reason
+code, the fee total, and `fundingOptions`, which is the interesting one:
+`existingCryptocurrencyBalance`, `buyingPowerPurchase`, `paymentMethodDepositUsage`. So the page can
+say a payment would come from a balance, from buying power, or from a card on file. Comparing a
+balance against a price would have missed the withdrawal minimum, the fees, and the fact that Mesh
+can cover a shortfall. Documented as Coinbase-only for now, and the UI says so.
 
-Only fields the API actually returns are rendered: name, symbol, amount, marketValue, lastPrice.
-The headline uses the crypto value rather than `totalValue`, because in sandbox that is dominated
-by ten million dollars of simulated fiat and looks absurd beside a fifty dollar pair of trainers.
+Fetched *behind* the holdings, so five Mesh calls do not stand between the shopper and the first
+number on screen.
 
 ### Webhook
 
-`POST /api/mesh/webhook`. This is the only thing that moves an order to settled.
+`POST /api/mesh/webhook`, and the only thing that writes settlement.
 
 The browser's `transferCompleted` says the provider acknowledged the transfer. It does not say the
-merchant has been paid, and a merchant should never take the customer's browser at its word for
-that. So the receipt renders complete and says **paid**, and only a verified webhook makes it say
-**settled**.
+merchant was paid: it runs on the customer's machine, it can be lost or forged, and exchanges can
+fail a transfer hours later. So the receipt renders complete and says **paid**, and only a verified
+webhook makes it say **settled**. That distinction is the whole operational argument, and it is why
+row seven of the trace stays open until a signature arrives.
 
-Three things matter and all three are easy to get wrong:
+Four things matter and all four are easy to get wrong.
 
-1. **Hash the raw bytes.** `await req.text()` first, parse after. Parsing and re-serialising the
-   JSON changes key order and whitespace, the digest changes, and every delivery fails for reasons
-   that look like a key problem. There is a test for exactly this.
+1. **Hash the raw bytes.** `await req.text()` first, parse after. Parsing and re-serialising changes
+   key order and whitespace, the digest changes, and every delivery fails for reasons that look like
+   a key problem. There is a test for exactly this.
 2. **Deduplicate on `EventId`**, which is stable across retries. `Id` changes per attempt.
-3. **Answer fast.** Mesh wants a 200 inside 200ms, so the route does one read and one write.
+3. **Claim the key after the write succeeds**, not before. Claiming first meant a delivery arriving
+   before its order existed burned the id, and Mesh's retry was answered *duplicate*, losing the
+   settlement permanently and silently.
+4. **Write to your own key.** Settlement lives at `settlement:{orderId}` and is merged on read. The
+   browser also writes the order record, and two writers doing read-modify-write with no
+   compare-and-swap meant a webhook landing between the browser's read and its write vanished.
 
-Because the receipt never depends on it, a sandbox that stays quiet cannot break the demo.
+`node scripts/webhook-check.mjs <url>` proves all of it without waiting for Mesh: a signed delivery
+is accepted, a replay is deduplicated, a forged signature is refused, an unsigned one is refused, and
+the same JSON re-serialised is refused because the bytes changed. If that passes and settlement still
+does not appear, nothing arrived.
 
 ---
 
 ## For the merchant's engineer
 
-What sits on your side, and what sits on Mesh's.
+**Yours:** six route handlers, one of them a webhook. A key/value store for the order and for webhook
+idempotency. A page that reacts to SDK events. That is the whole integration.
 
-**Yours:** six route handlers, one of which is a webhook. A key/value store for the order and for
-webhook idempotency. A page that reacts to SDK events. That is the whole integration.
+**Mesh's:** the provider catalogue, OAuth and MFA for every exchange, asset and network eligibility,
+pricing and fees, the transfer itself, and the entire interface between *connect* and *done*.
 
-**Mesh's:** the provider catalogue, OAuth and MFA for every exchange, asset and network
-eligibility, pricing and fees, the transfer itself, and the entire UI between "connect" and
-"done".
-
-Three things worth knowing before you scope it:
+Three things worth knowing before you scope it.
 
 **You do not build a provider picker.** Mesh matches the shopper's holdings against the asset and
-network you configured, and hides anything that cannot fund it. Widening from Coinbase to the
-whole catalogue is deleting one optional field from the link token. The technical view has a
-Providers tab that pulls the live catalogue and marks which ones can fund this exact payment, so
-you can see that rather than take it on trust.
+network you configured and hides anything that cannot fund it. Widening from one exchange to the
+whole catalogue is deleting one optional field. The Providers tab pulls both catalogues live and
+marks each entry *usable here*, *production only*, or the reason it cannot reach your network, so you
+can check that rather than take it on trust.
 
-**The auth token reaches the browser.** `onIntegrationConnected` hands it to client JavaScript.
-That is how the SDK works and you cannot change it. What you control is what happens in the next
-few milliseconds, which is covered under [Security](#security).
+**The auth token reaches the browser.** `onIntegrationConnected` hands it to client JavaScript. That
+is how the SDK works and you cannot change it. What you control is the next few milliseconds, which
+is covered under Security.
 
 **There are two different fees and you should show both.** The exchange charges a withdrawal fee,
-quoted by Mesh in the payment preview: 0.01 USDC in sandbox, with gas at 0. Separately, `clientFee`
-on the link token is your own cut, taken as a ratio of the order rather than a cash figure, and
-this build sets it to $2 handling via `NEXT_PUBLIC_MERCHANT_HANDLING_FEE`. Neither changes what
-lands at the destination, which stays at exactly $50. The bag, the checkout and the receipt all
-show the arithmetic. Hiding it is the kind of thing a merchant finds out about a week later.
-
-**Two catalogues, two different questions.** `transfers/managed/integrations` tells you who *could*
-settle USDC on Ethereum: 13 entries here, including Kraken, Robinhood, Uphold and CashApp.
-`integrations` tells you who Link will actually *offer* right now: 5 in sandbox, because only
-Coinbase and Binance have simulated accounts and the rest would open a real exchange login. The
-Providers tab shows both, so "can we take Kraken" gets answered with data. Bybit is in neither
-list for this client, so that one is a Mesh account question rather than a code change.
+quoted by Mesh in the preview: 0.01 USDC in sandbox, with gas at 0. Separately, `clientFee` is your
+own cut. Neither changes what lands at the destination. The receipt shows the arithmetic rather than
+a total that does not add up.
 
 ---
 
-## Local setup
+## Decisions and tradeoffs
 
-Requires Node 22 or newer.
+The reasoning, because it is the part that transfers. Each of these was a real fork.
+
+**Two Link sessions, not one.** Holdings can only be read once a connection exists, so showing what
+someone holds before asking them to pay means connecting first and paying second. *Cost:* an extra
+Link session and an extra click. *Bought:* the portfolio, which is what shows Mesh does more than
+move money, and the ability to price the payment before anyone commits.
+
+**The picker on connect, deep-link on pay.** The connect session shows Mesh's catalogue because
+choosing a provider is the shopper's decision and it is the breadth argument. The payment session is
+deep-linked to whatever they connected, because being asked the same question twice in one checkout
+reads as a bug. **Change account** drops the deep-link and puts the picker back. *Tradeoff:* the
+sandbox picker offers three self-custody wallets that hold testnet assets only, so they cannot reach
+Ethereum mainnet. They are labelled before they are picked and produce designed failures when they
+are. `MESH_COINBASE_INTEGRATION_ID` removes the picker entirely if a merchant wants that.
+
+**Three stablecoins, not one, and not ETH.** The merchant accepts USDC, USDT and PYUSD to the same
+address, and the shopper chooses. Mesh's own guidance is to offer every destination you can, so a
+transfer has more ways to succeed. Stablecoins only, deliberately: all three sit at about a dollar,
+so a $50 price stays $50. Accepting ETH would mean showing a converted amount that moves while it is
+read, which is a different product decision. USDC remains the default and the required path.
+
+**Eligibility is Mesh's answer, not arithmetic.** Comparing a balance against a price is the obvious
+implementation and it is wrong: it misses the withdrawal minimum, the fees, and the fact that Mesh
+can fund a shortfall from buying power or a card. *Cost:* one Mesh call per accepted asset. *Bought:*
+the page can say where the money would come from, which is the thing a merchant does not expect.
+
+**The browser can say paid. Only the webhook says settled.** Covered above. *Cost:* the demo needs a
+publicly reachable URL and a registered callback, and sandbox does not guarantee delivery. *Bought:*
+the one answer to *how do I know I got paid* that is actually true.
+
+**Redis, for two things only.** Webhook idempotency needs a write that survives across serverless
+invocations, and the order the browser polls has to be the order the webhook wrote. Neither works in
+process memory on Vercel. Nothing else here needs a database. Without it the app runs on memory, says
+so on `/api/health`, and warns in the panel.
+
+**The handling fee ships at zero.** `clientFee` is wired up and tested, and the conversion from
+dollars to Mesh's 0-1 ratio is verified against the API. It is set to 0 because a shop that
+advertises $50 and charges $52 either has the wrong headline price or reveals the fee at the last
+step, and the second is drip pricing, which is now unlawful in the UK. The capability is worth
+demonstrating; the dark pattern is not. Set the variable to see it flow through the bag, the checkout
+and the receipt.
+
+**One pair, free delivery.** Both for the same reason: the Mesh payment is a fixed amount, so a
+quantity control or a delivery charge would put the bag total and the money that actually moves out
+of step. A checkout whose total disagrees with its payment is the one thing that cannot happen.
+
+**Reset keeps the connection.** It clears the order and leaves the account connected, so a second run
+skips the exchange login. It never calls Mesh's remove-connection endpoint, which permanently revokes
+a token id with no way back. *Tradeoff:* a genuinely fresh session needs a new browser profile, which
+is the right cost for the rarer case.
+
+**The order id is a UUID; the reference is a label.** They used to be one string, a 32-bit hash
+reduced modulo 10,000, which was simultaneously the display number, the store key and Mesh's
+`transactionId`. Even odds of a collision after 118 orders, and a collision settled the wrong order.
+`WELT-3F9A2C` is now derived from the id and nothing keys on it.
+
+**Embedded above 1024px, overlay below.** Embedded puts the payment inside the checkout column, which
+is the better experience and the one Mesh's polish guide is written for. It does not survive a phone:
+the frame loads, fires `pageLoaded`, and renders white.
+
+**No state management library.** One reducer over SDK events produces the order status, the manifest
+and the receipt, and it is the most tested thing here because it is where a regression would cost
+something.
+
+**No explorer link.** The returned hash does not exist on Ethereum mainnet, Sepolia or Base. Checked
+with `eth_getTransactionByHash` against all three. It is a Mesh sandbox reference, shown as one. A
+link to a 404 would be worse than none.
+
+**The SDK's `BrokerType` union is behind the API.** It lists `sandbox` but not `sandboxCoinbase`,
+which is exactly what a sandbox Coinbase connection returns. Broker type is carried as a string and
+asserted at one boundary rather than narrowed to a union that would reject a value Mesh itself sent.
+
+**On the Mesh domains.** `meshconnect.com` now redirects to `www.meshpay.com`, but
+`docs.meshconnect.com` is still canonical and `docs.meshpay.com` does not resolve, so the docs links
+and the API hosts here still say meshconnect. That is the current state of the rebrand, not an
+oversight.
+
+---
+
+## Security
+
+**The API key never leaves the server.** Verified by grepping every production chunk.
+
+**The Client ID does reach the browser**, unavoidably: the link token is base64 of the Link iframe URL
+and the id is inside it. An identifier, not a credential, but worth stating accurately rather than
+claiming both stay server side.
+
+**The auth token is handled, not avoided.** It arrives in client JavaScript because the SDK puts it
+there. It is posted straight to `/api/mesh/connection`, held against an httpOnly session cookie, and
+never sent back down. It is redacted **at capture** in the reducer, so neither the technical panel nor
+the Copy log button can leak it, and the panel shows a masked prefix only.
+
+**Orders are owned.** Both order routes read the session cookie and 404 on a mismatch, so a stranger
+cannot read an order or stamp it paid with a fabricated hash. 404 rather than 403, so the endpoint
+does not confirm which ids exist.
+
+**The browser cannot name its own price.** Amount, asset, network and destination all come from server
+configuration. The client sends a colourway, a size and an asset choice validated against the
+merchant's accepted list. It can move an order to `paid`; only the webhook writes `settled`.
+
+**Webhook signatures** are verified with a timing-safe comparison over the raw body. A rejected
+delivery gets an empty 401, so an unauthenticated caller cannot learn how the deployment is
+configured.
+
+**Responses are parsed through Zod**, using `.nullish()` wherever Mesh's OpenAPI marks a field
+nullable, so an unexpected shape fails closed rather than rendering and an explicit null does not take
+the checkout down. Event payloads and error strings render as text, never as HTML.
+
+**Link token minting is rate limited** per session, counted after validation so a malformed request
+cannot lock out an honest client, and failing open so a store outage can never be the reason someone
+cannot pay.
+
+**Minimal data.** No accounts, no login, no personal data. One opaque session id in an httpOnly
+cookie, and TTLs on everything.
+
+---
+
+## Failure handling
+
+Every failure has designed copy: a plain sentence for the shopper, one action, and the real message
+plus the Mesh reference kept for the technical panel. Retry is only offered where retrying is honest,
+which means minting a fresh token rather than reusing a spent one.
+
+Covered: missing configuration, link token failure, the SDK failing to load *or silently never
+loading*, the shopper closing Link (naming the page they left from), connection failure, declined, a
+wallet not present, a wallet that timed out, no eligible assets (listing what the account holds), a
+failed balance read, preview failure, execution failure, a declined transfer, an expired session, an
+expired auth token, Mesh timeouts, and repeated clicks.
+
+Three that are non-obvious:
+
+- **A failed balance read is not fatal.** The shopper can still pay, they just do not get to see
+  their holdings first. It renders as a warning beside a live pay button, not a dead end.
+- **Closing Link on the success page is not a failure.** Treating it as one is a classic way to make
+  a working demo look broken. Nor does closing Link after a failure overwrite the failure: the
+  specific state survives, which is the only way the designed failures are reachable at all.
+- **A transfer that is not `succeeded` is not `paid`.** Mesh documents `pending | succeeded | failed`
+  and the SDK's type narrows it to `'success'`, which is wrong. The value is read, not assumed.
+
+---
+
+## Testing
+
+62 tests over the logic where a regression costs something: webhook HMAC verification including the
+re-serialisation trap, `EventId` idempotency, both link token builders, the merchant fee ratio and the
+guarantee it never changes the destination amount, the provider catalogue mapping, the event to order
+reducer, and money formatting. Runs in under a second, needs no secrets.
+
+The reducer fixtures are trimmed copies of real sandbox payloads, including two failures that actually
+happened: a wallet not present on the device, and an account with nothing eligible.
+
+The provider mapping has its own file because a wrong field name shipped there, reading
+`content.integrations` from an endpoint that returns `content.items`, and a typecheck cannot see
+that. No tests against live Mesh: slow, flaky, needs secrets in CI, and spends the sandbox balance.
+
+---
+
+## Deployment
+
+Vercel, Node runtime, no edge.
+
+1. Set every variable from the table above in the Vercel project.
+2. Add your production domain to **Allowed Link URLs** in the Mesh dashboard.
+3. Register `https://<your-domain>/api/mesh/webhook` under the **Sandbox** Transfer Webhook Callback
+   URI, not the production one, which will never fire against a sandbox base URL. Copy the signing
+   secret immediately; it is shown once. Put it in `MESH_WEBHOOK_SECRET` **and redeploy**, because
+   Vercel does not pick up environment changes without one.
+4. Add an Upstash Redis integration. It sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`, which the app
+   accepts. Provisioning Upstash directly instead gives you `UPSTASH_REDIS_REST_*`.
+
+**Preview deployments will not work.** Every commit gets a new URL and Mesh validates the origin, so
+Link will not render unless you register that exact URL. Demo from production.
+
+Content Security Policy is set in `next.config.ts` and allows `*.meshconnect.com` in `frame-src` and
+`connect-src`, plus `file-cdn.meshconnect.com` for integration logos. Without those the Link overlay
+is a blank grey box.
+
+### Before you demo
 
 ```bash
-npm install
-cp .env.example .env.local   # then fill in the two Mesh values
-npm run dev
+curl https://<your-domain>/api/health                  # config.ok, webhookSecret, storage: redis
+node scripts/webhook-check.mjs https://<your-domain>   # 5/5
 ```
 
-Open http://localhost:3000. Add `?demo=1` to dock the technical panel and reveal the reset
-controls.
+Then: open the URL and click through to checkout a few minutes beforehand, because cold start is
+about a second per route and each route warms independently. Stop pushing to main, since every push
+rebuilds the alias cold. Use the bookmarked production domain rather than the Vercel dashboard's
+Visit button, which opens a per-deployment URL that is not a registered Mesh origin. Check the venue
+network reaches `*.meshconnect.com`. And check the sandbox balance still covers the payment: it is
+shared with every other Mesh sandbox user and each run spends about $50.
 
-| Variable | Required | Where it comes from |
-|---|---|---|
-| `MESH_CLIENT_ID` | yes | Mesh dashboard, Account > Get your API keys, top right |
-| `MESH_API_KEY` | yes | Same page, Sandbox keys. Shown once at generation |
-| `MESH_API_BASE_URL` | yes | `https://sandbox-integration-api.meshconnect.com` |
-| `MERCHANT_ADDRESS` | yes | The destination wallet |
-| `MERCHANT_NETWORK_ID` | yes | Ethereum, `e3c7fdd8-b1fc-4e51-85ae-bb276e075611` |
-| `MESH_COINBASE_INTEGRATION_ID` | no | Blank (default) shows Mesh's picker. Set it to open straight on one provider |
-| `NEXT_PUBLIC_MERCHANT_HANDLING_FEE` | no | Merchant fee in dollars, sent as Mesh's `clientFee`. `0` for none |
-| `UPSTASH_REDIS_REST_URL` / `_TOKEN` | no | Without these the app uses process memory |
-| `MESH_WEBHOOK_SECRET` | no | Sandbox Transfer Webhook Callback URI. Shown once |
+### Going to production
 
-**Register your domain before your first run.** In the dashboard, Account > Get your API keys >
-Allowed Link URLs, add `http://localhost:3000`. Mesh validates the origin the Link popup was opened
-from, and an unregistered domain fails to render with no console error. Changes take up to ten
-minutes to propagate. This is the single most common reason a first run shows a blank grey box.
-
-`/api/health` reports which variables are present, without values, and whether the store is Redis
-or memory.
+Per Mesh's own checklist: register a **production** webhook URI separately, move to the latest SDK,
+generate a production API key (which needs 2FA and business verification first), and change
+`MESH_API_BASE_URL` to `https://integration-api.meshconnect.com`. Mesh ask for a joint testing session
+before launch.
 
 ---
 
@@ -284,175 +497,34 @@ Every sandbox account uses password `Pass123` and code `123456`.
 | `Mesh3` | Cash only | Onramp-shaped accounts |
 | `Mesh4` | Large | Big balances |
 
-These are listed in the technical view's Demo tab, because failure states should be shown for real
-rather than described. Nothing in this app is mocked and no failure is simulated.
+These are in the panel's Demo tab, because failure states should be shown for real rather than
+described. Nothing here is mocked and no failure is simulated.
 
-**The sandbox is not Coinbase.** The login form is served by Mesh, not by the exchange, and typing
-real exchange credentials into it sends them somewhere they should not go. That is why the sandbox
-notice is on the page at the point of connection and stays visible through the payment step,
-rather than being a line in the footer. It happened during this build, which is how it got there.
+**The sandbox is not Coinbase.** The login form is served by Mesh, not the exchange, and typing real
+exchange credentials into it sends them somewhere they should not go. That is why the warning sits on
+the page at the point of connection *and stays visible while Link is open*, rather than being a line
+in a footer. It happened during this build, which is how it got there.
 
-Two more things observed in sandbox:
-
-- The returned `txHash` is a Mesh reference, not a chain transaction. It was checked against
-  Ethereum mainnet, Sepolia and Base with `eth_getTransactionByHash` and does not exist on any of
-  them. So the receipt shows it as a reference with no explorer link, because a link to a 404 is
-  worse than none.
-- The balance is shared between the Coinbase and Binance sandbox accounts and it depletes. Each
-  run spends 50.01 USDC from roughly 10,000.
-
----
-
-## Deployment
-
-Vercel, Node runtime, no edge.
-
-1. Set every variable from the table above in the Vercel project.
-2. Add your production domain to Allowed Link URLs in the Mesh dashboard.
-3. Register `https://<your-domain>/api/mesh/webhook` under **Sandbox** Transfer Webhook Callback
-   URI, not the production one. Copy the signing secret immediately, it is shown once.
-4. Add an Upstash Redis integration and set `UPSTASH_REDIS_REST_URL` and
-   `UPSTASH_REDIS_REST_TOKEN`.
-
-**Preview deployments will not work.** Vercel gives every commit a new URL and Mesh validates the
-origin, so Link will fail to render on a preview unless you register that exact URL. Demo from the
-production domain.
-
-Without Redis the app falls back to process memory. Locally that is fine. On Vercel it is not: the
-webhook and the browser may land on different instances, so settlement will never appear. The
-technical view says so in as many words when it detects it.
-
-Content Security Policy is set in `next.config.ts` and allows `*.meshconnect.com` in `frame-src`
-and `file-cdn.meshconnect.com` for integration logos. Without those the Link overlay is a blank
-grey box.
-
----
-
-## Security
-
-**The API key never leaves the server.** It exists only inside route handlers.
-
-**The Client ID does reach the browser**, unavoidably. The link token is base64 of the Link iframe
-URL and the Client ID is inside it. It is an identifier rather than a credential and Mesh intends
-this, but it is worth stating accurately rather than claiming both values stay server side.
-
-**The auth token is handled, not avoided.** `onIntegrationConnected` hands it to client
-JavaScript. It is posted straight to `/api/mesh/connection`, held against an httpOnly session
-cookie, and never sent back down. It is not kept in React state beyond the handoff, never
-rendered, and never logged. The technical view shows the `tokenId` and a masked prefix so you can
-see one arrived, not what it is.
-
-**Webhook signatures are verified** with a timing-safe comparison over the raw body, and an
-unsigned or wrongly signed delivery is rejected with a 401.
-
-**The browser cannot name its own price.** The amount, asset, network and destination all come
-from server configuration. The client sends a colourway and a size and nothing else. The browser
-can move an order to `paid`; only the webhook writes `settled`.
-
-**Responses are parsed through Zod**, so an unexpected shape fails closed rather than rendering.
-Event payloads and error strings are rendered as text, never as HTML.
-
-**Link token minting is rate limited** per session, because those are real Mesh resources.
-
-**Minimal data.** No accounts, no login, no personal data. One opaque session id in an httpOnly
-cookie, and TTLs on everything in the store.
-
----
-
-## Failure handling
-
-Every failure has designed copy: a plain sentence for the shopper, one action, and the real
-message plus the Mesh reference kept for the technical view. Retry is offered only where retrying
-is honest, which means minting a fresh token rather than reusing a spent one.
-
-Covered: missing configuration, link token failure, the SDK failing to load, the shopper closing
-Link (naming the page they left from), connection failure, connection declined, a wallet not
-present on the device, no eligible assets (listing what the account actually holds), a failed
-balance read, preview failure, execution failure, a declined transfer, an expired session, an
-expired auth token, Mesh timeouts, and repeated clicks.
-
-Two of those are non-obvious and worth calling out:
-
-- **A failed balance read is not fatal.** The shopper can still pay, they just do not get to see
-  their holdings first. The manifest marks that row failed and the flow continues.
-- **Closing Link on the success page is not a failure.** It is the end of a completed payment, and
-  treating it as an error is a classic way to make a working demo look broken.
-
----
-
-## Technical decisions
-
-**Two Link sessions, not one.** The portfolio can only be read once a connection exists, so
-showing holdings before asking for money requires connecting first and paying second. Passing the
-stored `tokenId` back as `accessTokens` means the second session skips the Coinbase login
-entirely: measured at twelve seconds from load to priced payment, with no sign-in.
-
-**Let Mesh do the choosing.** An earlier pass replaced Mesh's account picker with a grid of
-provider buttons in the merchant's own UI. It read as a half-built form, buried the pay button,
-and duplicated something Mesh already does well. The merchant's job is one sentence, before the
-customer commits, saying this is not a one-exchange checkout. `MESH_COINBASE_INTEGRATION_ID` will
-deep-link past the picker if a merchant wants that, and it is off by default.
-
-**No source list, despite multiple accounts working.** Coinbase and Binance sandbox return
-byte-for-byte identical portfolios, down to the account id. Two accounts side by side with
-matching balances reads as a bug. So the page shows one source and hands the choice to Link, then
-reports on the receipt whichever one actually paid.
-
-**Redis, and only for two things.** Webhook idempotency needs a write that survives across
-serverless invocations, and the order the browser polls has to be the order the webhook wrote.
-Neither works in process memory on Vercel. Nothing else needs a database.
-
-**No state management library.** One reducer over SDK events produces the order status, the
-manifest and the receipt. That reducer is the most tested thing in the codebase because it is
-where a regression would actually cost something.
-
-**One pair, free delivery, and both for the same reason.** The Mesh payment is for a fixed amount,
-so a quantity control or a delivery charge would put the bag total and the money that actually
-moves out of step. A checkout whose total disagrees with its payment is the one thing that cannot
-happen, so the constraint is designed in rather than papered over.
-
-**The bag lives in sessionStorage.** It survives a refresh and dies with the tab. A shop that
-remembers your bag next week is right for a shop and wrong for a demo that should open clean.
-
-**Tailwind with tokens, no component library.** The design is bespoke enough that a component
-library would be fought rather than used.
-
-**The `BrokerType` union in the SDK is behind the API.** It lists `sandbox` but not
-`sandboxCoinbase`, which is exactly what a sandbox Coinbase connection returns. Broker type is
-carried as a string and asserted at one boundary, with a comment, rather than narrowed to a union
-that would reject a value Mesh itself sent.
-
----
-
-## Testing
-
-```bash
-npm test
-```
-
-53 tests over the logic where a regression would cost something: webhook HMAC verification
-including the re-serialisation trap, `EventId` idempotency, both link token request builders, the
-merchant fee ratio and the guarantee that it never changes the destination amount, the event to
-order reducer, and money formatting. Runs in under a second and needs no secrets.
-
-The reducer tests use trimmed copies of real sandbox payloads captured during the build, including
-the two failures that actually happened: a MetaMask wallet not present on the device, and an
-account with nothing eligible.
-
-There are no tests against live Mesh. They would be slow, flaky, need secrets in CI, and spend the
-sandbox balance.
+The balance is shared between the Coinbase and Binance sandbox accounts and depletes with each run.
 
 ---
 
 ## What is deliberately not here
 
-No catalogue, cart, accounts or login. No architecture diagram, because the manifest does that job
-with real data. No second Mesh flow. No explorer link, because the sandbox hash is not on a chain.
-No confetti. No database beyond the one Redis instance the webhook needs. No component or state
-library. No mocked success states of any kind.
+No cart beyond one item, no accounts, no second Mesh flow, no confetti, no database beyond the one
+Redis instance the webhook needs, no component or state library, no mocked success states, no explorer
+link.
 
-If this were going to production the list of what to add next would start with: real order
-persistence and fulfilment, an `Expected` amount check against the webhook before marking anything
-settled, refund handling using the `refundAddress` Mesh returns, multiple `toAddresses` so the
-shopper can settle in something other than USDC, and the `Pending` webhook state, which sandbox
-does not guarantee.
+What a production build would add, in order: real order persistence and fulfilment; an expected-amount
+check against the webhook before anything is marked settled; refund handling using the `RefundAddress`
+Mesh returns, and the `RefundPending` and `RefundSucceeded` statuses this build reads but does not act
+on; a `userId` derived from a real user record rather than a four-hour cookie; and the onramp flow, so
+a customer holding no crypto at all can still pay.
+
+---
+
+## Licence
+
+MIT for the code. The product photographs are not mine and are not covered, see `LICENSE`. WELT is
+fictional, nothing is for sale, and this is an independent demo built against Mesh's public sandbox
+rather than an official example.

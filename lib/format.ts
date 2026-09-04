@@ -72,7 +72,8 @@ export function elapsed(at: number | null | undefined, from: number | null | und
  * joins on.
  *
  * Now the id is a UUID and this is a label derived from it: short enough to read out on a call,
- * and carrying no meaning of its own.
+ * and carrying no meaning of its own. Six hex characters will collide eventually and that is fine,
+ * because nothing keys on it. The store and Mesh both use the id.
  */
 export function orderNumber(id: string): string {
   return `WELT-${id.replace(/-/g, '').slice(0, 6).toUpperCase()}`
