@@ -135,6 +135,22 @@ export const transfersResponse = envelope.extend({
             createdTimestamp: z.number().nullish(),
             transferType: z.string().nullish(),
             from: z.object({ name: z.string().nullish(), type: z.string().nullish() }).nullish(),
+            /**
+             * Mesh's own delivery log per transfer, requested with `IncludeWebhooksLogs=true`.
+             * The answer to "why did this one not settle": no entry means Mesh never attempted a
+             * delivery, and an entry with a non-OK `responseCode` means it did and we refused it.
+             */
+            webhookLogs: z
+              .array(
+                z.object({
+                  id: z.string().nullish(),
+                  webhookUri: z.string().nullish(),
+                  responseCode: z.string().nullish(),
+                  sentTimestamp: z.number().nullish(),
+                  responseTimestamp: z.number().nullish()
+                })
+              )
+              .nullish(),
             fundingMethods: z
               .array(
                 z.object({
