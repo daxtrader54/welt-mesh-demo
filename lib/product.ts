@@ -102,6 +102,27 @@ export const SIZES: Size[] = [
   { uk: '12', eu: '47.5', inStock: true }
 ]
 
+/**
+ * Derived from the size run, never written out by hand.
+ *
+ * The listing advertised "Sizes 6 to 12" as a literal string and kept advertising it after UK 6 was
+ * taken out of stock, which is the sort of thing a shop gets complained at for. Anything the shop
+ * says about its sizes now comes from the same array the size picker reads.
+ */
+export const SIZE_RUN = (() => {
+  const stocked = SIZES.filter(s => s.inStock)
+  return {
+    from: stocked[0]?.uk ?? null,
+    to: stocked.at(-1)?.uk ?? null,
+    stocked: stocked.length,
+    soldOut: SIZES.length - stocked.length
+  }
+})()
+
+/** The real saving off RRP, so the badge and the price block cannot disagree. */
+export const SAVING = Math.round((PRODUCT.rrp - PRODUCT.price) * 100) / 100
+export const SAVING_PERCENT = Math.round((SAVING / PRODUCT.rrp) * 100)
+
 /** Only what is visible on the shoe or printed on it. No invented performance claims. */
 export const SPEC: { n: string; label: string; value: string }[] = [
   { n: '01', label: 'Upper', value: 'Mesh with synthetic overlays' },
