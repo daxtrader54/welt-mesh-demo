@@ -151,15 +151,30 @@ from other holdings.
 So the conversion signal is one boolean on the asset you are collecting, not a list of the assets
 the shopper could spend.
 
-**Which means it cannot tell you whether a specific held asset can pay.** Send three stablecoins as
-`toAddresses` and you get an answer about three stablecoins, whatever else the account holds. An
-account with fourteen positions returned three. The other eleven are unassessed, not refused, and a
-UI that renders both as blank space will be read as the second. `amountInFiat` is not what narrows
-it: at $50 that filter would have admitted ten of the fourteen.
+**It returns the holdings that can fund the transfer, and only those.** Measured, by experiment.
 
-Whether asking a wider question is possible we did not establish. `toAddresses` is documented as
-optional, so a call without it may return the whole portfolio with general transfer eligibility,
-but eligibility with no destination may also be meaningless. Untested.
+An account holding fourteen positions worth $435,000, including $398,000 of BTC, returned exactly
+three: USDC, USDT and PYUSD, the merchant's own accepted assets. The obvious explanation is that the
+response echoes `toAddresses`, and it is wrong: Mesh's documented example sends USDT and BTC
+destinations and gets a **USDC** holding back, a symbol that appears nowhere in its request.
+
+The other candidate was `amountInFiat`, documented as "only contain holdings with enough value".
+Removing it changed nothing at all: still three. At $50 that filter would in any case have admitted
+ten of the fourteen.
+
+So the omission is the answer. **Mesh assessed BTC against a $50 USDC-on-Ethereum destination and
+did not return it**, which is Mesh saying that BTC cannot fund this payment from this account. Not a
+gap in the question, and not the app declining to ask.
+
+Which lands hard against the pitch. "Pay from whatever you hold" is what draws people in, and the
+measured behaviour on a sandbox Coinbase account holding $398,000 of BTC is that BTC could not buy a
+$50 pair of trainers priced in USDC. Either conversion is not enabled for this client, or it is not
+available for this pair of assets, and the API does not distinguish those. Worth raising with Mesh
+rather than designing around.
+
+One residual doubt, and the experiment that would remove it: add a destination symbol the account
+does not hold, such as DAI. If a DAI holding comes back, the response echoes `toAddresses` after all
+and everything above is wrong. If it does not, the reading is confirmed. Not run.
 
 `transferBalanceFundingAvailability.status` exists in the OpenAPI spec with values
 `disabled | available | requiresAmountLowering | notApplicable | unavailable`, but it is **not in
@@ -394,5 +409,7 @@ screens, and remember the sandbox MFA prompt appears twice.
 - Whether conversion fires when the shopper holds none of the destination asset.
 - Which brokers support conversion, and whether the sandbox does at all.
 - Whether the shopper sees a conversion choice or Mesh simply routes it.
+- Whether conversion is switched off for this client, or unavailable for BTC to USDC specifically.
+  `configure` omits the asset either way and the API does not say which.
 - Whether the `Pay with` row on Mesh's payment sheet is tappable, which decides whether a shopper
   has any say in the funding asset at all.
