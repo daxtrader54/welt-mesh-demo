@@ -3,10 +3,9 @@ import { Shop } from '@/components/Shop'
 export const dynamic = 'force-dynamic'
 
 /**
- * The technical panel is docked and open by default on a wide screen, because it is the point of
- * the build. `?demo=0` starts it collapsed for anyone who wants to see only the shop. Either way
- * it can be collapsed and reopened from the console bar, and neither changes how the integration
- * behaves or mocks anything.
+ * The shop opens as a shop. The technical panel starts collapsed and is opened from the bar along
+ * the bottom or the handle on the right edge; `?demo=1` starts it docked for presenting. Neither
+ * changes how the integration behaves and neither mocks anything.
  */
 export default async function Page({
   searchParams
@@ -14,6 +13,6 @@ export default async function Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
   const params = await searchParams
-  const closed = params.demo === '0' || params.demo === 'false'
-  return <Shop closedByDefault={closed} />
+  const openPanel = params.demo === '1' || params.demo === 'true'
+  return <Shop panelOpenByDefault={openPanel} />
 }
