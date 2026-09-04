@@ -2,6 +2,7 @@
 
 import Image from 'next/image'
 import { usd } from '@/lib/format'
+import { RATING, Stars } from './Reviews'
 import {
   COLOURWAYS,
   PRODUCT,
@@ -35,7 +36,15 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
             <br />
             Syntac
           </h1>
-          <p className="mt-5 text-sm leading-relaxed text-muted">
+          {/* Rating and count together, always. Three reviews is self-evidently a demonstration
+              rather than a trading record, and the count is what makes that obvious. */}
+          <div className="mt-4 flex items-center gap-2">
+            <Stars n={Math.round(RATING.average)} />
+            <span className="data text-sm">{RATING.average.toFixed(1)}</span>
+            <span className="note">{RATING.count} reviews</span>
+          </div>
+
+          <p className="mt-4 text-sm leading-relaxed text-muted">
             Four colourways, one price, and no more coming. Lightweight mesh upper, memory foam
             sockliner, and a moulded sole that has outlasted its own product line.
           </p>
@@ -125,7 +134,17 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
         ))}
       </ul>
 
-      <div className="rule-t mt-14 grid gap-6 pt-6 sm:grid-cols-3">
+      {/* Both of these are true, which is the only reason they are here. The count comes from the
+          same stock flags the size picker reads, and the cutoff is a statement about tomorrow, not
+          a countdown pretending stock is running out while you watch. */}
+      <p className="rule-t mt-10 pt-4 text-sm text-muted">
+        <span className="font-medium text-ink">
+          {SIZE_RUN.stocked} of {SIZE_RUN.stocked + SIZE_RUN.soldOut} sizes still in stock.
+        </span>{' '}
+        End of run, so once a size is gone it is gone. Order before 3pm for same day dispatch.
+      </p>
+
+      <div className="rule-t mt-10 grid gap-6 pt-6 sm:grid-cols-3">
         {[
           ['Free delivery', 'On every order, no minimum'],
           ['30 day returns', 'Unworn, in the original box'],

@@ -258,13 +258,21 @@ export function Portfolio({
            * merchant can be paid in BTC. We only ever quote the merchant's own three assets, so we
            * hold no opinion on the other eleven and should not print one.
            */}
+          {/**
+           * The real reason, from Mesh's own answer, rather than a hedge.
+           *
+           * `configure` returns `eligibleForTransferWithFunding` against the asset being collected.
+           * False means the balance covers the order on its own, so Mesh has no reason to touch
+           * anything else, which is why an account holding $398,000 of BTC and 9,000 USDC pays in
+           * USDC every time. It is not a limit, it is the absence of a problem.
+           */}
           <p className="note mt-3">
             The merchant settles in {PRODUCT.settlement.symbol}, which does not mean these cannot
-            pay for the order. Mesh can convert a held asset into the one being collected, and the
-            choice belongs to its own screen: press Pay, then change <em>Pay with</em> on Mesh&apos;s
-            payment sheet. There is no field on a link token for a merchant to make that choice on
-            a shopper&apos;s behalf, so a picker here would be for show. All {positions.length}{' '}
-            balances came from one connection.
+            pay for the order.{' '}
+            {funding?.some(f => f.eligibleWithFunding)
+              ? `Mesh has said it can fund this order by converting what you hold, and it does that at the payment step.`
+              : `You hold enough ${PRODUCT.settlement.symbol} already, so Mesh has no reason to convert anything. On an account without it, Mesh funds the payment by converting one of these instead, and the receipt names which.`}{' '}
+            All {positions.length} balances came from one connection.
           </p>
         </details>
       )}

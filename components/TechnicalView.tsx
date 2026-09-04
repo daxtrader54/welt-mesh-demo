@@ -280,6 +280,11 @@ export function TechnicalView({
       `## Mesh SDK events (${o.log.length} of ${SDK_EVENT_TYPES} possible types)`,
       ...o.log.map(e => `${rel(e.at)}  ${e.type}  ${JSON.stringify(e.payload ?? null)}`),
       '',
+      '## Webhook (server to server, never touched the browser)',
+      order.webhook
+        ? `EventId=${order.webhook.eventId ?? '-'} TransferStatus=${order.webhook.transferStatus ?? '-'} received=${new Date(order.webhook.receivedAt).toISOString()} txHash=${order.webhook.txHash ?? '-'}`
+        : '(none received)',
+      '',
       '## Funding (transfers/managed/configure)',
       ...(fundingLines.length ? fundingLines : ['(not asked, or no answer)']),
       '',
@@ -370,6 +375,44 @@ export function TechnicalView({
                 {copied ? 'Copied' : 'Copy log'}
               </button>
             </div>
+            {/**
+             * The webhook gets its own block, above the SDK stream and never inside it.
+             *
+             * It is the only fact in the whole trace that did not arrive through the browser: Mesh
+             * posts it to our server, we verify the signature, and the page finds out by polling.
+             * Filing it among the SDK events would make it look like something Link emitted, which
+             * would quietly undo the distinction the whole settlement design rests on. So it sits
+             * apart, with the EventId that made it idempotent and the status that made it count.
+             */}
+            {order.webhook && (
+              <div className="rule-b mb-3 pb-3">
+                <div className="flex items-baseline justify-between gap-3">
+                  <span className="label">Webhook received</span>
+                  <span className="data text-xs" style={{ color: 'var(--plate-accent)' }}>
+                    {order.webhook.transferStatus ?? 'delivered'}
+                  </span>
+                </div>
+                <p className="note mt-1">
+                  Server to server, signature verified. This never touched the browser, which is why
+                  it is the only thing that moves an order to settled.
+                </p>
+                <dl className="mt-2">
+                  {[
+                    ['EventId', order.webhook.eventId ?? '—'] as [string, string],
+                    ['Received', clockTime(order.webhook.receivedAt)],
+                    ['TxHash', order.webhook.txHash ?? '—']
+                  ].map(([k, v]) => (
+                    <div key={k} className="flex items-baseline justify-between gap-3 py-0.5">
+                      <dt className="label">{k}</dt>
+                      <dd className="data text-xs" title={v}>
+                        {v && v.length > 24 ? `${v.slice(0, 8)}…${v.slice(-8)}` : v}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+
             {/**
              * An empty log next to a manifest with stamped rows reads as a broken panel, and it
              * was the first thing a tester asked about. It is not broken: a returning shopper's
