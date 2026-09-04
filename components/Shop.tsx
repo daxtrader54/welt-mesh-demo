@@ -1093,6 +1093,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                           funding={activeFunding}
                           providerName={connection?.brokerName ?? null}
                           payingWith={asset}
+                          showProvider={positions.length === 0}
                           onChangeAccount={() => startPayment(true)}
                         />
                         <button

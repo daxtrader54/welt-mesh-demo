@@ -44,11 +44,22 @@ const REASONS: Record<string, string> = {
   assetNotSupported: 'not supported on this network'
 }
 
-/** What Mesh would draw on. The second and third are the interesting ones. */
+/**
+ * What Mesh would draw on, in the shopper's words.
+ *
+ * All seven values Mesh's `CryptocurrencyFundingOptionType` defines, not the three we happened to
+ * have seen. The four conversion cases were missing, so anything Mesh offered to convert rendered
+ * as a blank line, and the panel quietly implied it could only spend what was already in the right
+ * asset. That is the opposite of the thing this integration exists to demonstrate.
+ */
 const FUNDING: Record<string, string> = {
   existingCryptocurrencyBalance: 'from your balance',
   buyingPowerPurchase: 'from your buying power',
-  paymentMethodDepositUsage: 'from a payment method on file'
+  paymentMethodDepositUsage: 'from a payment method on file',
+  cryptocurrencyConversion: 'by converting another asset you hold',
+  stableCoinNoFeeConversion: 'by converting another stablecoin, no fee',
+  cryptocurrencyBuyingPowerConversion: 'by converting from your buying power',
+  cryptocurrencyMultiStepConversion: 'by converting through more than one step'
 }
 
 function describeFunding(q: Quote): string | null {
@@ -92,7 +103,6 @@ export function Portfolio({
     p => quoteFor(p.symbol)?.eligible === null && p.amount > 0
   )
   const choosable = payable.length ? payable : unpriced
-  const selectedQuote = quoteFor(selected)
   const chosenSymbols = new Set(choosable.map(p => p.symbol))
   const rest = positions.filter(p => !chosenSymbols.has(p.symbol))
 
@@ -114,11 +124,14 @@ export function Portfolio({
 
       {choosable.length > 0 && (
         <>
-          <p className="note mt-5">
-            {payable.length
-              ? `Pay with any of these. The merchant receives ${usd(PRODUCT.price)} on ${PRODUCT.settlement.network} either way.`
-              : `Mesh could not price these in advance for this account, so eligibility is not confirmed here. Pick one and Mesh checks it before taking anything.`}
-          </p>
+          <div className="rule-t mt-5 flex items-baseline justify-between gap-4 pt-3">
+            <span className="label">Settles directly</span>
+            <span className="note">
+              {payable.length
+                ? `Merchant receives ${usd(PRODUCT.price)} on ${PRODUCT.settlement.network}`
+                : 'Not priced in advance'}
+            </span>
+          </div>
 
           <ul className="mt-2">
             {choosable.map(p => {
@@ -131,7 +144,7 @@ export function Portfolio({
                     type="button"
                     onClick={() => onSelect(q.symbol)}
                     aria-pressed={active}
-                    className={`flex w-full items-center gap-3 border px-4 py-3 text-left transition-colors ${
+                    className={`flex w-full items-center gap-3 border px-3 py-2.5 text-left transition-colors ${
                       active ? 'border-2 border-ink bg-plate' : 'mb-px border-rule hover:border-ink'
                     }`}
                   >
@@ -143,13 +156,8 @@ export function Portfolio({
                       {active && <span className="h-2 w-2 rounded-full bg-ink" />}
                     </span>
 
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline gap-2">
-                        <span className="data text-sm font-semibold">{p.symbol}</span>
-                        <span className="note truncate">{p.name ?? q.name}</span>
-                      </span>
-                      {funding && <span className="note block">{funding}</span>}
-                    </span>
+                    <span className="data w-16 shrink-0 text-sm font-semibold">{p.symbol}</span>
+                    <span className="note min-w-0 flex-1 truncate">{p.name ?? q.name}</span>
 
                     <span className="shrink-0 text-right">
                       <span className="data block text-sm">{token(p.amount)}</span>
@@ -158,27 +166,15 @@ export function Portfolio({
                       )}
                     </span>
                   </button>
+
+                  {/* Once, under the row it applies to. Repeated on every row it was six lines of
+                      identical text, which read as noise rather than as the thing Mesh is doing. */}
+                  {active && funding && <p className="note mt-1.5 pl-7">Funded {funding}.</p>}
                 </li>
               )
             })}
           </ul>
         </>
-      )}
-
-      {/**
-       * The trap a live demo must not walk into.
-       *
-       * The merchant genuinely accepts three stablecoins and the quote says all three are eligible,
-       * but that quote is priced against the production broker, not the sandbox one. Picking PYUSD
-       * sent Mesh to an onramp with its own sign-in, which the demo test account does not open, and
-       * the run ended on "Invalid credentials" with nothing on our side explaining why.
-       */}
-      {selectedQuote && !selectedQuote.primary && (
-        <p className="note mt-3" style={{ color: 'var(--color-warn)' }}>
-          Only {PRODUCT.settlement.symbol} has been run end to end in this sandbox. Mesh may route
-          another asset through an onramp with its own sign-in, which the demo test account does not
-          cover.
-        </p>
       )}
 
       {quotes === null && (
@@ -195,9 +191,13 @@ export function Portfolio({
 
       {rest.length > 0 && (
         <details className="rule-t mt-5 pt-3">
-          <summary className="btn-quiet list-none">
-            Everything else in this account ({rest.length})
+          <summary className="flex cursor-pointer items-baseline justify-between gap-4 list-none">
+            <span className="label">Also held ({rest.length})</span>
+            <span className="note underline underline-offset-2">
+              {usd(rest.reduce((t, p) => t + (p.marketValue ?? 0), 0))} more in this account
+            </span>
           </summary>
+
           <ul className="mt-3">
             {rest.slice(0, 12).map(p => {
               const q = quoteFor(p.symbol)
@@ -205,26 +205,35 @@ export function Portfolio({
               return (
                 <li
                   key={p.symbol}
-                  className="rule-b flex items-baseline justify-between gap-4 py-1.5"
+                  className="rule-b flex items-baseline gap-3 py-1.5"
                 >
-                  <span className="flex min-w-0 items-baseline gap-2">
-                    <span className="data text-xs font-medium">{p.symbol}</span>
-                    <span className="note truncate">{p.name}</span>
-                  </span>
-                  <span className="flex shrink-0 items-baseline gap-3">
-                    {why && <span className="note">{why}</span>}
-                    <span className="data text-xs">{usd(p.marketValue)}</span>
-                  </span>
+                  <span className="data w-16 shrink-0 text-xs font-medium">{p.symbol}</span>
+                  <span className="note min-w-0 flex-1 truncate">{p.name}</span>
+                  {why && <span className="note shrink-0">{why}</span>}
+                  <span className="data shrink-0 text-xs">{usd(p.marketValue)}</span>
                 </li>
               )
             })}
           </ul>
+
+          {/**
+           * This used to say the rest of the account could not pay for the order, which is both
+           * unfounded and the opposite of the argument the integration exists to make.
+           *
+           * Unfounded because nothing here was ever asked. The quote endpoint prices the asset the
+           * merchant RECEIVES, not the one the shopper spends, so quoting BTC would ask whether the
+           * merchant can be paid in BTC. We only ever quote the merchant's own three assets, so we
+           * hold no opinion on the other eleven and should not print one.
+           */}
           <p className="note mt-3">
-            This shop settles in stablecoins, so the rest of the account cannot pay for it. Mesh
-            read all of it from one connection.
+            The merchant settles in {PRODUCT.settlement.symbol}, which does not mean these cannot
+            pay for the order. Mesh can convert a held asset into the one being collected, and it
+            offers that at the payment step rather than here. All {positions.length} balances came
+            from one connection.
           </p>
         </details>
       )}
+
     </section>
   )
 }

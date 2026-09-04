@@ -49,7 +49,24 @@ export async function GET() {
         await dropConnection(sid!, connection.brokerType)
         return fail(res.error, 409)
       }
-      return fail(res.error, 502)
+
+      /**
+       * Name the provider. Reading holdings is a per-integration capability, not a property of the
+       * app, and the two behave differently in this sandbox: Coinbase returns fourteen positions,
+       * while Binance answers `holdings/get` with "Could not get portfolio from Sandbox."
+       *
+       * A shopper who connected Binance and read an unattributed "could not read your balances"
+       * has no way to tell whether it was them, us, or Mesh. Saying which account it was makes the
+       * next decision, try another one, obvious. It is also the more interesting fact for a
+       * merchant watching: portfolio read and payment are separate capabilities, and this
+       * integration has the second without the first. The payment still works, which is why this
+       * stays a warning, and a run today proved it by connecting Binance, failing this call, then
+       * paying from Coinbase inside Link.
+       */
+      return fail(
+        { ...res.error, title: `We connected to ${connection.brokerName}, but could not read your balances` },
+        502
+      )
     }
 
     const positions = res.data.positions

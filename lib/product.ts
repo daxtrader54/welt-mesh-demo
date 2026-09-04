@@ -94,11 +94,10 @@ export function plateSrc(colourway: ColourwayId, plate: PlateId): string {
 export type Size = { uk: string; eu: string; inStock: boolean }
 
 export const SIZES: Size[] = [
-  { uk: '6', eu: '39.5', inStock: true },
   { uk: '7', eu: '41', inStock: true },
-  { uk: '8', eu: '42', inStock: true },
+  { uk: '8', eu: '42', inStock: false },
   { uk: '9', eu: '43', inStock: true },
-  { uk: '10', eu: '44.5', inStock: false },
+  { uk: '10', eu: '44.5', inStock: true },
   { uk: '11', eu: '46', inStock: false },
   { uk: '12', eu: '47.5', inStock: true }
 ]

@@ -24,6 +24,7 @@ export function FundingSource({
   funding,
   providerName,
   payingWith,
+  showProvider = true,
   onChangeAccount
 }: {
   /** Null when the account connected but its balances could not be read. Not a failure. */
@@ -31,6 +32,12 @@ export function FundingSource({
   providerName: string | null
   /** The asset the shopper chose, when they chose one. */
   payingWith?: string | null
+  /**
+   * False when the portfolio is already on screen directly above this, which it usually is.
+   * Without it the provider, the account name and the balance were printed twice inside 200px,
+   * and the repetition was the single biggest thing making this column look padded.
+   */
+  showProvider?: boolean
   onChangeAccount: () => void
 }) {
   const s = funding?.settlement ?? null
@@ -39,21 +46,23 @@ export function FundingSource({
     <section className="rule-t pt-4">
       <div className="label mb-3">Paying from</div>
 
-      <div className="flex items-start justify-between gap-6">
-        <div>
-          <div className="text-lg font-semibold leading-tight">
-            {funding?.provider ?? providerName ?? 'Your account'}
+      {showProvider && (
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="text-lg font-semibold leading-tight">
+              {funding?.provider ?? providerName ?? 'Your account'}
+            </div>
+            {funding?.accountName && <div className="note">{funding.accountName}</div>}
           </div>
-          {funding?.accountName && <div className="note">{funding.accountName}</div>}
-        </div>
 
-        {s && (
-          <div className="text-right">
-            <div className="data text-lg font-medium">{token(s.amount, s.symbol)}</div>
-            {s.marketValue !== null && <div className="label">{usd(s.marketValue)}</div>}
-          </div>
-        )}
-      </div>
+          {s && (
+            <div className="text-right">
+              <div className="data text-lg font-medium">{token(s.amount, s.symbol)}</div>
+              {s.marketValue !== null && <div className="label">{usd(s.marketValue)}</div>}
+            </div>
+          )}
+        </div>
+      )}
 
       {s ? (
         <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 border border-rule bg-plate px-4 py-3">
