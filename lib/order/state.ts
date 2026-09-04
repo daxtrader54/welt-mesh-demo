@@ -122,11 +122,16 @@ export type OrderEvent =
   | { type: 'pay:started'; at: number }
   | { type: 'link'; at: number; event: LinkEventType }
   | { type: 'settled'; at: number; txHash?: string | null }
+  | { type: 'settlement:timeout'; at: number; reason: string }
   | { type: 'failed'; at: number; failure: Failure }
   | { type: 'reset' }
 
 function mark(steps: Step[], id: StepId, state: StepState, at: number, facts: Fact[] = []): Step[] {
-  return steps.map(s => (s.id === id ? { ...s, state, at, facts: facts.length ? facts : s.facts } : s))
+  return steps.map(s =>
+    s.id === id
+      ? { ...s, state, at: at === 0 ? s.at : at, facts: facts.length ? facts : s.facts }
+      : s
+  )
 }
 
 function activate(steps: Step[], id: StepId): Step[] {
@@ -177,6 +182,17 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
         payment: { ...state.payment, txHash: action.txHash ?? state.payment.txHash },
         steps: mark(state.steps, 'settled', 'done', action.at, [
           { label: 'Confirmed by', value: 'Mesh webhook' }
+        ])
+      }
+
+    case 'settlement:timeout':
+      // Not a failure. The order is paid. This says plainly why row seven is still open, which
+      // beats a blank line that sits there forever looking broken.
+      return {
+        ...state,
+        steps: mark(state.steps, 'settled', 'pending', 0, [
+          { label: 'Waiting on', value: 'Mesh webhook' },
+          { label: 'Status', value: action.reason }
         ])
       }
 
@@ -231,6 +247,10 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
 
     case 'transferPreviewed': {
       const p = event.payload
+      const already = next.steps.find(s => s.id === 'preview')
+      const firstPricedAt = already?.state === 'done' ? (already.at ?? at) : at
+      const refreshes = (already?.facts.find(f => f.label === 'Requotes')?.value ?? '0') as string
+      const requotes = already?.state === 'done' ? Number(refreshes) + 1 : 0
       return {
         ...next,
         // The source Mesh actually priced against. This is where a mid-flow switch shows up.
@@ -263,13 +283,16 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
           ),
           'preview',
           'done',
-          at,
+          firstPricedAt,
           [
             { label: 'Amount', value: `${p.amount} ${p.symbol}` },
             {
               label: 'Exchange fee',
               value: `${p.institutionTransferFee?.fee ?? 0} ${p.institutionTransferFee?.feeCurrency ?? ''}`.trim()
             },
+            // Mesh holds a quote for about 30 seconds and then re-prices. Showing the count is
+            // more honest than silently advancing the timestamp on every refresh.
+            ...(requotes ? [{ label: 'Requotes', value: String(requotes) }] : []),
             // Only shown when the merchant actually takes one, so a zero-fee shop is not
             // cluttered with a row that always reads nothing.
             ...(p.customClientFee?.fee

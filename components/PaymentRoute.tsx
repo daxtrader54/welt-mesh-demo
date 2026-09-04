@@ -165,9 +165,9 @@ export function Manifest({ order }: { order: OrderState }) {
 
       {order.status === 'paid' && (
         <p className="mt-4 max-w-2xl text-sm text-muted">
-          Settled stays open until Mesh sends a signed webhook. The browser reporting a completed
-          transfer means the provider acknowledged it, which is not the same as the merchant being
-          paid, so it is not what marks the order settled.
+          {order.steps.at(-1)?.facts.some(f => f.label === 'Waiting on')
+            ? 'Row seven is still open because no signed webhook has arrived. That is the point of it: the browser reporting a completed transfer means the provider acknowledged it, which is not the same as the merchant being paid. Until a webhook says so, this order is paid and not settled.'
+            : 'Settled stays open until Mesh sends a signed webhook. The browser reporting a completed transfer means the provider acknowledged it, which is not the same as the merchant being paid, so it is not what marks the order settled.'}
         </p>
       )}
     </section>

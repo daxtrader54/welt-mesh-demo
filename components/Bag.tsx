@@ -178,8 +178,10 @@ export function BagView({
 
         <p className="note mt-3">
           {HANDLING_FEE > 0
-            ? `Delivery is free. The ${usd(HANDLING_FEE)} handling fee is ours and is added on top, so the merchant still receives ${usd(PRODUCT.price)}. Your exchange may add its own withdrawal fee, which is shown before you confirm.`
-            : 'Delivery is free on this drop, so the total is exactly what gets paid.'}
+            ? `Delivery is free. The ${usd(HANDLING_FEE)} handling fee is ours and sits on top, so the merchant still receives ${usd(PRODUCT.price)}.`
+            : `Delivery is free, and ${usd(PRODUCT.price)} is what reaches the merchant.`}{' '}
+          Your exchange may charge a small withdrawal fee on top. Mesh quotes it exactly before you
+          confirm, and it is never more than a cent or two on a payment this size.
         </p>
       </aside>
     </div>
