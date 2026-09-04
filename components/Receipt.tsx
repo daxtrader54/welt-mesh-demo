@@ -51,7 +51,25 @@ export function Receipt({
     { label: 'Colour', value: `${colourway.name} · ${colourway.ref}` },
     { label: 'Size', value: size ?? '—' },
     { label: 'Price', value: usd(PRODUCT.price), mono: true },
-    ...(HANDLING_FEE > 0 ? [{ label: 'Handling', value: usd(HANDLING_FEE), mono: true }] : []),
+    /**
+     * The fees belong in the body, not behind a disclosure. Without them the receipt showed a
+     * $50.00 price and a $50.01 total with nothing on screen accounting for the difference, which
+     * is the one thing a receipt exists to prevent.
+     */
+    ...(order.fees.institution
+      ? [
+          {
+            label: 'Exchange fee',
+            value: token(order.fees.institution, order.fees.institutionCurrency ?? p.symbol),
+            mono: true
+          }
+        ]
+      : []),
+    ...(order.fees.client
+      ? [{ label: 'Handling fee', value: token(order.fees.client, p.symbol), mono: true }]
+      : HANDLING_FEE > 0
+        ? [{ label: 'Handling fee', value: usd(HANDLING_FEE), mono: true }]
+        : []),
     { label: 'Paid with', value: p.symbol ?? PRODUCT.settlement.symbol },
     { label: 'Network', value: p.networkName ?? PRODUCT.settlement.network },
     { label: 'From', value: order.source?.name ?? '—' },
@@ -60,8 +78,6 @@ export function Receipt({
 
   const detail: { label: string; value: string }[] = [
     { label: 'Amount sent', value: token(p.amount, p.symbol) },
-    { label: 'Exchange fee', value: token(order.fees.institution, order.fees.institutionCurrency) },
-    ...(order.fees.client ? [{ label: 'Handling fee', value: token(order.fees.client, p.symbol) }] : []),
     { label: 'Network fee', value: token(order.fees.gas ?? 0, p.symbol) },
     // Only worth a row when it contradicts the arithmetic above it, which it sometimes does.
     ...(meshDisagrees
@@ -106,9 +122,8 @@ export function Receipt({
         </div>
         {totalCharged > PRODUCT.price && (
           <p className="note mt-1">
-            Includes the exchange withdrawal fee
-            {HANDLING_FEE > 0 ? ` and ${usd(HANDLING_FEE)} handling` : ''}. The destination address
-            receives {usd(PRODUCT.price)}.
+            The destination address receives {usd(PRODUCT.price)}. The rest is the exchange&apos;s
+            withdrawal fee{HANDLING_FEE > 0 ? ' and ours' : ''}, charged on top.
           </p>
         )}
 
