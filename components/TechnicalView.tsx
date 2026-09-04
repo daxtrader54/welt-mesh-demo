@@ -130,7 +130,46 @@ export function ConsoleBar({
   )
 }
 
-type Tab = 'events' | 'integration' | 'providers' | 'demo'
+type Tab = 'events' | 'integration' | 'providers' | 'build' | 'demo'
+
+/**
+ * How the thing was put together, for the person who asks after the demo rather than during it.
+ * Decisions and their reasons, not a feature list, because the reasons are the transferable part.
+ */
+const BUILD_NOTES: { heading: string; body: string }[] = [
+  {
+    heading: 'Two Link sessions, not one',
+    body: 'Holdings can only be read once a connection exists, so showing what you hold before asking you to pay means connecting first and paying second. The second session is deep-linked to the account you already chose, so the picker appears once in a checkout rather than twice.'
+  },
+  {
+    heading: 'The browser cannot settle an order',
+    body: 'transferCompleted in the browser means the exchange acknowledged the withdrawal. It runs on the customer machine, it can be lost or forged, and exchanges can fail a transfer hours later. It sets the order to paid. Only a signature-verified webhook sets it to settled.'
+  },
+  {
+    heading: 'The auth token is handled, not avoided',
+    body: 'The SDK hands the Coinbase token to client JavaScript and that cannot be changed. It is posted to the server immediately, held against an httpOnly session cookie, and never sent back down. Nothing renders it and nothing logs it.'
+  },
+  {
+    heading: 'Nothing in the trace is on a timer',
+    body: 'Every manifest row is stamped by a real SDK event. A row that stays blank is a step that did not happen, which is more useful in a demo than a spinner that always completes.'
+  },
+  {
+    heading: 'The price is set on the server',
+    body: 'Amount, asset, network and destination all come from server configuration. The browser sends a colourway and a size and nothing else. A checkout that lets the client name its own price is not a checkout.'
+  },
+  {
+    heading: 'Redis, for two things only',
+    body: 'Webhook idempotency needs a write that survives across serverless invocations, and the order the page polls has to be the order the webhook wrote. Neither works in process memory on Vercel. Nothing else here needs a database.'
+  },
+  {
+    heading: 'Findings that changed the build',
+    body: 'The SDK type union omits sandboxCoinbase, which is what the sandbox actually returns. The SDK touches window at module scope, so it is imported inside the click. Coinbase and Binance sandbox return identical portfolios, so a two-account view would have looked like a bug. And the returned hash exists on no chain we could find, so there is no explorer link.'
+  },
+  {
+    heading: 'What is real and what is not',
+    body: 'Real: the product photographs, the Mesh calls, the events, the fees, the holdings, the provider catalogue. Not real: the shop, the reviews, the delivery promise, and the shoes.'
+  }
+]
 
 export function TechnicalView({
   open,
@@ -219,7 +258,7 @@ export function TechnicalView({
       </div>
 
       <nav className="rule-b flex gap-4 px-5">
-        {(['events', 'integration', 'providers', 'demo'] as Tab[]).map(t => (
+        {(['events', 'integration', 'providers', 'build', 'demo'] as Tab[]).map(t => (
           <button
             key={t}
             type="button"
@@ -366,6 +405,24 @@ export function TechnicalView({
                 </span>
               </div>
             ))}
+          </>
+        )}
+
+        {tab === 'build' && (
+          <>
+            <p className="note mb-4">
+              Why it is put together the way it is. The reasons travel better than the features.
+            </p>
+            {BUILD_NOTES.map(n => (
+              <div key={n.heading} className="rule-b py-3">
+                <div className="text-sm font-semibold">{n.heading}</div>
+                <p className="note mt-1">{n.body}</p>
+              </div>
+            ))}
+            <p className="note mt-4">
+              The README goes further: architecture, the Mesh calls one by one, security, failure
+              handling, and what a production build would add.
+            </p>
           </>
         )}
 
