@@ -72,6 +72,39 @@ export const holdingsValueResponse = envelope.extend({
     .nullish()
 })
 
+/**
+ * `transfers/managed/configure` asks the only question that is actually about this account.
+ *
+ * The quote endpoint takes no auth token, so it cannot know what anyone holds: it prices a broker's
+ * capability and its minimums. This one takes `fromAuthToken` and answers per holding, including
+ * `eligibleForTransferWithFunding`, which is Mesh saying it could fund the payment by converting
+ * that asset. That is the difference between "USDC can be sent to this address" and "your BTC can
+ * pay for this".
+ */
+export const configureResponse = envelope.extend({
+  content: z
+    .object({
+      holdings: z
+        .array(
+          z.object({
+            symbol: z.string().nullish(),
+            availableBalance: z.number().nullish(),
+            availableBalanceInFiat: z.number().nullish(),
+            eligibleForTransfer: z.boolean().nullish(),
+            eligibleForTransferWithFunding: z.boolean().nullish(),
+            ineligibilityReason: z.string().nullish()
+          })
+        )
+        .nullish(),
+      transferBalanceFundingAvailability: z
+        .object({ status: z.string().nullish() })
+        .nullish()
+    })
+    .nullish()
+})
+
+export type ConfigureResponse = z.infer<typeof configureResponse>
+
 export type LinkTokenResponse = z.infer<typeof linkTokenResponse>
 export type HoldingsResponse = z.infer<typeof holdingsResponse>
 export type HoldingsValueResponse = z.infer<typeof holdingsValueResponse>

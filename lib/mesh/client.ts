@@ -3,6 +3,7 @@ import type { ZodType } from 'zod'
 import { meshEnv } from '@/lib/env'
 import { failure, type Failure } from '@/lib/failure'
 import {
+  configureResponse,
   holdingsResponse,
   holdingsValueResponse,
   linkTokenResponse,
@@ -276,6 +277,72 @@ export async function getQuote(
         type: f.fundingOption ?? 'unknown',
         method: f.paymentMethodType ?? null
       }))
+    }
+  }
+}
+
+export type AssetFunding = {
+  symbol: string
+  /** Mesh can send this asset as it stands. */
+  eligible: boolean
+  /** Mesh could fund the payment with this asset by converting it. The interesting one. */
+  eligibleWithFunding: boolean
+  reason: string | null
+  balanceInFiat: number | null
+}
+
+export type TransferConfig = {
+  holdings: AssetFunding[]
+  /** disabled | available | requiresAmountLowering | notApplicable | unavailable */
+  fundingStatus: string | null
+}
+
+/**
+ * Ask Mesh which of THIS account's holdings can pay for THIS order.
+ *
+ * The quote endpoint cannot answer that and was being read as though it could. It takes no auth
+ * token, so what it returns is a broker's capability and its minimums, not a view of anyone's
+ * balances. This endpoint takes `fromAuthToken` and answers per holding, which is what turns
+ * "the merchant settles in USDC" into "your BTC can pay for this, by converting".
+ *
+ * `fromType` takes the connection's own broker type. Confirmed by probe: `sandboxCoinbase`,
+ * `coinbase` and `sandbox` are all accepted here, unlike the quote endpoint, which refuses the
+ * sandbox names, and unlike holdings/get, which requires them.
+ */
+export async function configureTransfer(
+  authToken: string,
+  brokerType: string,
+  amountInFiat: number,
+  destinations: { networkId: string; symbol: string; address: string }[]
+): Promise<MeshCall<TransferConfig>> {
+  const res = await meshPost(
+    '/api/v1/transfers/managed/configure',
+    {
+      fromAuthToken: authToken,
+      fromType: brokerType,
+      toAddresses: destinations,
+      amountInFiat,
+      fiatCurrency: 'USD'
+    },
+    configureResponse
+  )
+  if (!res.ok) return res
+
+  const c = res.data.content
+  return {
+    ok: true,
+    ms: res.ms,
+    data: {
+      holdings: (c?.holdings ?? [])
+        .filter(h => h.symbol)
+        .map(h => ({
+          symbol: h.symbol!,
+          eligible: h.eligibleForTransfer ?? false,
+          eligibleWithFunding: h.eligibleForTransferWithFunding ?? false,
+          reason: h.ineligibilityReason ?? null,
+          balanceInFiat: h.availableBalanceInFiat ?? null
+        })),
+      fundingStatus: c?.transferBalanceFundingAvailability?.status ?? null
     }
   }
 }

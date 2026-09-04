@@ -1,7 +1,8 @@
 import { failure } from '@/lib/failure'
 import { fail, guard, ok } from '@/lib/http'
-import { getQuote } from '@/lib/mesh/client'
+import { configureTransfer, getQuote } from '@/lib/mesh/client'
 import { ACCEPTED_ASSETS, PRODUCT } from '@/lib/product'
+import { meshEnv } from '@/lib/env'
 import { readSessionId } from '@/lib/session'
 import { getSession } from '@/lib/store/records'
 
@@ -29,9 +30,33 @@ export async function GET() {
       return fail(failure('portfolio_failed', { detail: 'No connected account for this session' }), 409)
     }
 
-    const results = await Promise.all(
-      ACCEPTED_ASSETS.map(a => getQuote(connection.brokerType, a.symbol, PRODUCT.price))
-    )
+    const env = meshEnv()
+
+    /**
+     * Two different questions, asked together.
+     *
+     * The quotes price the merchant's own assets: minimums, fees, and the funding routes a broker
+     * supports. They take no auth token, so they say nothing about this account, which is a thing
+     * the UI was quietly reading them as though they did.
+     *
+     * `configure` takes the auth token and answers per holding for this account, including
+     * `eligibleForTransferWithFunding`, which is Mesh saying it could pay with that asset by
+     * converting it. That is what lets the page say a shopper's BTC can buy a pair of shoes
+     * instead of listing it as something the shop cannot accept.
+     */
+    const [results, config] = await Promise.all([
+      Promise.all(ACCEPTED_ASSETS.map(a => getQuote(connection.brokerType, a.symbol, PRODUCT.price))),
+      configureTransfer(
+        connection.authToken,
+        connection.brokerType,
+        PRODUCT.price,
+        ACCEPTED_ASSETS.map(a => ({
+          networkId: env.merchantNetworkId,
+          symbol: a.symbol,
+          address: env.merchantAddress
+        }))
+      )
+    ])
 
     return ok({
       // A quote that failed to fetch is reported as unknown rather than as ineligible: we do not
@@ -51,7 +76,13 @@ export async function GET() {
               funding: []
             }
       }),
-      /** Stated on screen: Mesh documents this endpoint as Coinbase-only for now. */
+      /**
+       * Mesh's per-holding answer for this account, or null when the call failed. Null means
+       * unknown and must never be rendered as a refusal, which is the mistake the quotes made.
+       */
+      funding: config.ok ? config.data.holdings : null,
+      fundingStatus: config.ok ? config.data.fundingStatus : null,
+      /** Stated on screen: Mesh documents the quote endpoint as Coinbase-only for now. */
       brokerType: connection.brokerType,
       amountInFiat: PRODUCT.price
     })

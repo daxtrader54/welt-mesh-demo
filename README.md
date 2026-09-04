@@ -240,8 +240,21 @@ Quoting one and charging the other would be worse than saying nothing, so the ch
 the exchange adds a withdrawal fee without inventing a figure, and the receipt shows the real
 arithmetic afterwards.
 
-Fetched *behind* the holdings, so five Mesh calls do not stand between the shopper and the first
-number on screen.
+Then `POST /api/v1/transfers/managed/configure`, which is the only call that answers a question
+about *this account*. The quote endpoint takes no auth token, so whatever it says is a property of
+the broker and its minimums, and reading it as a verdict on the shopper's holdings is a mistake this
+build made for a while. `configure` takes `fromAuthToken` and returns one entry per holding with
+`eligibleForTransfer`, `eligibleForTransferWithFunding` and an `ineligibilityReason`. The second of
+those is the interesting one: it is Mesh saying it could pay with that asset by converting it, which
+is what lets the portfolio tell someone holding $397,000 of BTC that their BTC can buy the shoes.
+
+**Three endpoints, three different names for the same connection.** `holdings/get` requires
+`sandboxCoinbase` and rejects `coinbase`. `transfers/managed/quote` does the exact reverse. Only
+`configure` accepts either. All three were measured, and `lib/mesh/requests.ts` carries the mapping.
+
+Fetched *behind* the holdings, so these calls do not stand between the shopper and the first number
+on screen, and every one of them fails soft: an unanswered call renders as silence, never as a
+refusal.
 
 ### Webhook
 
