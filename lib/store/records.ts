@@ -36,7 +36,15 @@ export type SessionRecord = {
 export type OrderStatus = 'created' | 'paid' | 'settled' | 'failed'
 
 export type OrderRecord = {
+  /** A UUID. The store key, and the `transactionId` Mesh returns on the webhook. */
   id: string
+  /** What the customer sees and reads out. Derived from the id, carries no meaning. */
+  reference: string
+  /**
+   * The session that created this order. Both order routes check it, because without it any
+   * caller who knew or guessed an id could read an order and stamp it paid.
+   */
+  sid: string
   createdAt: number
   status: OrderStatus
   /** What was bought. */
