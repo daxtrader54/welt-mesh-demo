@@ -1,6 +1,7 @@
 import type { LinkEventType } from '@meshconnect/web-link-sdk'
 import type { Failure } from '@/lib/failure'
 import { failure } from '@/lib/failure'
+import { isDeadTokenEvent } from '@/lib/mesh/errors'
 
 /**
  * One reducer drives the manifest, the receipt and the order status.
@@ -461,6 +462,22 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
 
     case 'transferNoEligibleAssets': {
       const held = event.payload.arrayOfTokensHeld ?? []
+
+      /**
+       * An empty holdings array is what an account with nothing in it looks like. It is also what
+       * an account Mesh could not read looks like, and the two are indistinguishable from this
+       * payload alone.
+       *
+       * Observed: a dead stored token produced `transferConfigureError` ("Please login again to
+       * continue.") and this event in the same millisecond, and because this one arrived second it
+       * overwrote the real reason with "Nothing in that account can cover this". The shopper was
+       * told their account was empty when it holds ten thousand USDC.
+       *
+       * So an empty array never overwrites a failure that is already set. A populated one still
+       * does, because then this event genuinely knows something the earlier one did not.
+       */
+      if (!held.length && next.failure) return { ...next, status: 'failed' }
+
       return {
         ...next,
         status: 'failed',
@@ -530,14 +547,22 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
         ])
       }
 
+    /**
+     * Two different problems arrive on this event and they need different answers.
+     *
+     * "Please login again to continue." means the stored `accessTokens` we passed into the session
+     * are dead, which is the same fault the holdings call reports as "Unauthorized token". The cure
+     * is reconnecting, and the shop has to forget the connection to offer that. Anything else here
+     * is an ordinary expired payment session, where starting again is enough.
+     */
     case 'transferConfigureError':
       return {
         ...next,
         status: 'failed',
-        failure: failure('session_expired', {
-          detail: event.payload.errorMessage,
-          reference: event.payload.requestId
-        })
+        failure: failure(
+          isDeadTokenEvent(event.payload.errorMessage) ? 'connection_expired' : 'session_expired',
+          { detail: event.payload.errorMessage, reference: event.payload.requestId }
+        )
       }
 
     case 'transferDeclined':

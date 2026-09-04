@@ -3,7 +3,7 @@ import { fail, guard, ok } from '@/lib/http'
 import { getPortfolio } from '@/lib/mesh/client'
 import { PRODUCT } from '@/lib/product'
 import { readSessionId } from '@/lib/session'
-import { getSession } from '@/lib/store/records'
+import { dropConnection, getSession } from '@/lib/store/records'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -27,10 +27,9 @@ export async function GET() {
     }
 
     if (connection.expiresAt && connection.expiresAt < Date.now()) {
+      await dropConnection(sid!, connection.brokerType)
       return fail(
-        failure('session_expired', {
-          title: 'Your account connection expired',
-          hint: 'Connect again to see your balances.',
+        failure('connection_expired', {
           detail: `Auth token expired at ${new Date(connection.expiresAt).toISOString()}`
         }),
         409
@@ -38,7 +37,20 @@ export async function GET() {
     }
 
     const res = await getPortfolio(connection.authToken, connection.brokerType)
-    if (!res.ok) return fail(res.error, 502)
+
+    /**
+     * Only the expiry we can see up front is caught above. Link does not always return an
+     * `expiresInSeconds`, so a connection can sit here with `expiresAt` null and a token Mesh
+     * stopped accepting hours ago, and the first we hear of it is this call failing. Throwing the
+     * connection away here is what stops the next click repeating it.
+     */
+    if (!res.ok) {
+      if (res.error.code === 'connection_expired') {
+        await dropConnection(sid!, connection.brokerType)
+        return fail(res.error, 409)
+      }
+      return fail(res.error, 502)
+    }
 
     const positions = res.data.positions
       .filter(p => (p.marketValue ?? 0) > 0 || p.amount > 0)

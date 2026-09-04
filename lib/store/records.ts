@@ -94,6 +94,24 @@ export async function clearSession(sid: string): Promise<void> {
   await store().del(sessionKey(sid))
 }
 
+/**
+ * Forget one provider's connection, keeping the session and any others.
+ *
+ * Called when Mesh refuses the stored token. Leaving a dead connection on file is what put a
+ * returning shopper in a loop: the shop kept offering "already connected, no sign-in this time",
+ * the holdings call kept failing, and nothing on screen would clear it. Note this deliberately
+ * does not call Mesh's remove-connection endpoint, which permanently revokes a tokenId. The token
+ * is already useless to us; there is no need to destroy it at Mesh's end too.
+ */
+export async function dropConnection(sid: string, brokerType: string): Promise<void> {
+  const session = await getSession(sid)
+  if (!session) return
+  await putSession(sid, {
+    ...session,
+    connections: session.connections.filter(c => c.brokerType !== brokerType)
+  })
+}
+
 export async function getOrder(id: string): Promise<OrderRecord | null> {
   return store().get<OrderRecord>(orderKey(id))
 }

@@ -135,6 +135,34 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const fail = useCallback((f: Failure) => dispatch({ type: 'failed', at: Date.now(), failure: f }), [])
 
   /**
+   * Throw away a connection Mesh will not accept, on the page and on the server.
+   *
+   * Two paths report the same dead token and both end here. The holdings call returns
+   * `connection_expired`, and Link raises `transferConfigureError` carrying "Please login again to
+   * continue." inside a payment session. The portfolio route has already dropped it server side in
+   * the first case, which makes the DELETE a no-op there rather than a second code path.
+   *
+   * Clearing `choseCrypto` is what puts the shopper back on the payment options, where the connect
+   * button and the full catalogue link live. Leaving it set kept them on a crypto-only screen whose
+   * only control was "Continue anyway", which is the dead end this exists to prevent.
+   */
+  const forgetConnection = useCallback(async () => {
+    setConnection(null)
+    setHasConnection(false)
+    setChoseCrypto(false)
+    setFunding(null)
+    setPositions([])
+    setQuotes([])
+    setPickedIntegrationId(null)
+    try {
+      await fetch('/api/mesh/connection', { method: 'DELETE' })
+    } catch {
+      // Best effort. The shopper is already being sent back to connect again, and the next
+      // successful connection replaces this one anyway.
+    }
+  }, [])
+
+  /**
    * Read the connected account: holdings first, then Mesh's per-asset quotes.
    *
    * Its own function because two paths need it. A fresh connection calls it from
@@ -158,6 +186,18 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       note('GET /api/mesh/portfolio', 'POST /api/v1/holdings/get + /value', Date.now() - started, json.ok)
 
       if (!json.ok) {
+        /**
+         * An expired connection is not a warning, because "continue anyway" is not honest advice
+         * once the server has thrown the token away. The shopper goes back to the payment options
+         * with the connection forgotten, which puts the connect button and the full catalogue
+         * link back on screen. Everything else stays a warning: the payment still works without
+         * the portfolio, and that is worth saying rather than blocking on.
+         */
+        // The effect watching for `connection_expired` does the forgetting, wherever it is reported.
+        if (json.error?.code === 'connection_expired') {
+          dispatch({ type: 'failed', at: Date.now(), failure: json.error })
+          return
+        }
         dispatch({ type: 'holdings:failed', at: Date.now(), failure: json.error })
         return
       }
@@ -544,6 +584,17 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       cancelled = true
     }
   }, [])
+
+  /**
+   * A dead connection, reported from either path, is forgotten here.
+   *
+   * Keyed on the code rather than the failure object so it fires on the transition and not on
+   * every dispatch. Both reporters only have to say what happened; this decides what to do about
+   * it, which keeps the holdings path and the Link path from drifting apart.
+   */
+  useEffect(() => {
+    if (order.failure?.code === 'connection_expired') void forgetConnection()
+  }, [order.failure?.code, forgetConnection])
 
   /** Fetch the SDK chunk as the shopper reaches checkout, so the pay click does not pay for it. */
   useEffect(() => {

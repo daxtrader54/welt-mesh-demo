@@ -15,6 +15,7 @@ import {
   type ConnectTokenInput,
   type PaymentTokenInput
 } from './requests'
+import { isDeadToken } from './errors'
 
 /**
  * The whole Mesh surface this app touches: three endpoints, one fetch helper.
@@ -23,7 +24,15 @@ import {
 
 const TIMEOUT_MS = 15_000
 
-export type MeshCall<T> = { ok: true; data: T; ms: number } | { ok: false; error: Failure; ms: number }
+export type MeshCall<T> =
+  | { ok: true; data: T; ms: number }
+  /**
+   * `status` and `errorType` ride alongside the shopper-facing failure because some decisions can
+   * only be made from the raw answer. Telling an expired connection from a bad minute is one of
+   * them, and it decides whether we throw the stored token away.
+   */
+  | { ok: false; error: Failure; ms: number; status?: number; errorType?: string | null }
+
 
 async function meshPost<T>(path: string, body: unknown, schema: ZodType<T>): Promise<MeshCall<T>> {
   const started = Date.now()
@@ -70,12 +79,20 @@ async function meshPost<T>(path: string, body: unknown, schema: ZodType<T>): Pro
       }
     }
 
-    const envelope = parsed.data as { status?: string; message?: string; displayMessage?: string; errorHash?: string }
+    const envelope = parsed.data as {
+      status?: string
+      message?: string
+      displayMessage?: string
+      errorHash?: string
+      errorType?: string
+    }
 
     if (!res.ok || (envelope.status && envelope.status !== 'ok')) {
       return {
         ok: false,
         ms,
+        status: res.status,
+        errorType: envelope.errorType ?? null,
         error: failure(res.status === 429 ? 'rate_limited' : 'link_token', {
           title: envelope.displayMessage || undefined,
           detail: envelope.message || `HTTP ${res.status} from ${path}`,
@@ -144,10 +161,13 @@ export async function getPortfolio(authToken: string, brokerType: string): Promi
     // Rebuilt rather than spread: `failure()` looks up title, hint and retryable from the code at
     // construction, so overriding only `code` leaves the link-token copy attached to a holdings
     // error and the shopper reads "We could not start the payment" about their balances.
+    const dead = isDeadToken(holdings.status, holdings.errorType, holdings.error.detail)
     return {
       ok: false,
       ms: Date.now() - started,
-      error: failure('portfolio_failed', {
+      status: holdings.status,
+      errorType: holdings.errorType,
+      error: failure(dead ? 'connection_expired' : 'portfolio_failed', {
         detail: holdings.error.detail,
         reference: holdings.error.reference
       })

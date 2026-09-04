@@ -78,6 +78,29 @@ export async function POST(req: Request) {
 }
 
 /**
+ * Forget the stored connection.
+ *
+ * The holdings route drops a dead connection itself, because it is the one making the failing
+ * call. Link reports the same fault on its own path, as `transferConfigureError` carrying "Please
+ * login again to continue.", and the page has no other way to act on it. Without this the shopper
+ * is offered "already connected, no sign-in this time" on a token that has just been refused twice.
+ *
+ * Idempotent, and never an error: forgetting something that is already gone is the outcome asked
+ * for. Like the reset, it does not call Mesh's remove-connection endpoint, which would permanently
+ * revoke the token id.
+ */
+export async function DELETE() {
+  return guard(async () => {
+    const sid = await readSessionId()
+    const session = sid ? await getSession(sid) : null
+    if (!sid || !session) return ok({ cleared: true })
+
+    await putSession(sid, { ...session, connections: [] })
+    return ok({ cleared: true })
+  })
+}
+
+/**
  * Does this session already have an account connected?
  *
  * Asked once on load so a returning shopper is offered "Pay with Coinbase, connected" rather than

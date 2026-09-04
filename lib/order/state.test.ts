@@ -216,6 +216,61 @@ describe('failure states', () => {
     expect(s.failure?.code).toBe('session_expired')
     expect(s.failure?.retryable).toBe(true)
   })
+
+  /**
+   * Real sequence, captured 4 September, from a payment session opened with a stored token Mesh
+   * had stopped accepting. Both events arrived in the same millisecond, in this order.
+   */
+  it('does not let an empty no-eligible-assets overwrite the real reason', () => {
+    const configureError: LinkEventType = {
+      type: 'transferConfigureError',
+      payload: {
+        errorMessage: 'Please login again to continue.',
+        requestId: '809f51953dcaca3d83f0e273f6a8da9d'
+      }
+    } as unknown as LinkEventType
+
+    const noAssets: LinkEventType = {
+      type: 'transferNoEligibleAssets',
+      payload: {
+        integrationType: 'sandboxCoinbase',
+        integrationName: 'Coinbase',
+        arrayOfTokensHeld: [],
+        noAssetsType: 'noAssets'
+      }
+    } as unknown as LinkEventType
+
+    let s = reduceOrder(initialOrderState(), link(configureError))
+    // The stored token is dead, so the cure is reconnecting, not restarting the session.
+    expect(s.failure?.code).toBe('connection_expired')
+
+    s = reduceOrder(s, link(noAssets, T + 1))
+    // The account holds ~10,000 USDC. An empty array here means Mesh could not read it at all,
+    // and telling the shopper their account is empty would be a wrong diagnosis.
+    expect(s.failure?.code).toBe('connection_expired')
+    expect(s.status).toBe('failed')
+    // Still logged, because the panel should show everything that actually fired.
+    expect(s.log.map(e => e.type)).toContain('transferNoEligibleAssets')
+  })
+
+  it('still reports no eligible assets when it knows what is held', () => {
+    const noAssets: LinkEventType = {
+      type: 'transferNoEligibleAssets',
+      payload: {
+        integrationName: 'Coinbase',
+        arrayOfTokensHeld: [{ symbol: 'DOGE', amount: 12, ineligibilityReason: 'unsupported network' }]
+      }
+    } as unknown as LinkEventType
+
+    const earlier = reduceOrder(initialOrderState(), link({
+      type: 'transferPreviewError',
+      payload: { errorMessage: 'something else' }
+    } as unknown as LinkEventType))
+
+    const s = reduceOrder(earlier, link(noAssets, T + 1))
+    expect(s.failure?.code).toBe('no_eligible_assets')
+    expect(s.failure?.detail).toContain('12 DOGE')
+  })
 })
 
 describe('the event log', () => {
