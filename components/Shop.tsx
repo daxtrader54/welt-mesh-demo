@@ -127,8 +127,40 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const colourway = findColourway(colourwayId)
   /** True when what is on screen is exactly what is already in the bag. */
   const inBag = Boolean(bag && bag.colourway.id === colourwayId && bag.size === size)
+
+  /**
+   * The "Paying from" panel has to follow the asset the shopper picked.
+   *
+   * The server works out the settlement position for the merchant's default, USDC, because that is
+   * what it settles in when nobody chooses. Picking PYUSD then left the panel reading 9,347.87
+   * USDC and "Enough USDC to cover this order" directly above a row saying the merchant receives
+   * PYUSD: three numbers describing two different payments.
+   *
+   * Coverage comes from Mesh's quote where it answered, and falls back to the balance only when it
+   * did not, which keeps the eligibility story honest rather than quietly reverting to arithmetic.
+   */
+  const payingWith = asset ?? PRODUCT.settlement.symbol
+  const activeFunding: Funding | null = funding && {
+    ...funding,
+    settlement:
+      funding.settlement?.symbol === payingWith
+        ? funding.settlement
+        : (() => {
+            const held = positions.find(p => p.symbol === payingWith)
+            if (!held) return null
+            const quoted = quotes?.find(q => q.symbol === payingWith)?.eligible
+            return {
+              symbol: payingWith,
+              amount: held.amount,
+              marketValue: held.marketValue ?? null,
+              covers: quoted ?? held.amount >= PRODUCT.price
+            }
+          })()
+  }
   const orderIdRef = useRef<string | null>(null)
   orderIdRef.current = orderId
+  /** Whether the Link session now open was handed a stored Mesh token id. See the reducer. */
+  const reusedTokensRef = useRef(false)
 
   const note = useCallback((route: string, mesh: string | null, ms: number | null, ok: boolean) => {
     setCalls(prev => [...prev, { at: Date.now(), route, mesh, ms, ok }])
@@ -347,7 +379,13 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   )
 
   const { open, busy } = useMeshLink({
-    onEvent: event => dispatch({ type: 'link', at: Date.now(), event: event as LinkEventType }),
+    onEvent: event =>
+      dispatch({
+        type: 'link',
+        at: Date.now(),
+        event: event as LinkEventType,
+        reusedTokens: reusedTokensRef.current
+      }),
     onConnected: takeConnection,
     onTransferFinished,
     onExit: (error, summary) => {
@@ -377,6 +415,8 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       note('POST /api/mesh/link-token', 'POST /api/v1/linktoken', info.ms, true)
       if (info.orderId) setOrderId(info.orderId)
       if (info.reference) setOrderRef(info.reference)
+      // A ref, not state: the events that need it can arrive in the same tick as the open.
+      reusedTokensRef.current = info.reusedTokens
     },
     onVisibilityChange: setLinkOpen
   })
@@ -953,22 +993,9 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                     {!connected && !order.failure && !linkOpen && (
                       <>
                         <div className="space-y-2">
-                          {[
-                            { key: 'card' as const, name: 'Card', note: 'Visa, Mastercard, Amex' },
-                            { key: 'applePay' as const, name: 'Apple Pay', note: 'One tap' }
-                          ].map(m => (
-                            <button
-                              key={m.key}
-                              type="button"
-                              onClick={() => setPretend(m.key)}
-                              className="flex w-full items-center gap-3 border border-rule bg-plate px-4 py-3.5 text-left transition-colors hover:border-ink"
-                            >
-                              <span className="h-4 w-4 shrink-0 rounded-full border border-rule" aria-hidden />
-                              <span className="flex-1 text-sm font-medium">{m.name}</span>
-                              <span className="note">{m.note}</span>
-                            </button>
-                          ))}
-
+                          {/* Crypto leads. It is the selected method and the whole point of the
+                              shop, and burying it under two options that open a sheet saying they
+                              are for show read as an afterthought. */}
                           <div className="border-2 border-ink bg-plate px-4 pb-4 pt-3.5">
                             <div className="flex items-center gap-3">
                               <span
@@ -1012,9 +1039,23 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                               <FundingNote />
                             </div>
                           </div>
-                        </div>
 
-                        <SandboxNotice />
+                          {[
+                            { key: 'card' as const, name: 'Card', note: 'Visa, Mastercard, Amex' },
+                            { key: 'applePay' as const, name: 'Apple Pay', note: 'One tap' }
+                          ].map(m => (
+                            <button
+                              key={m.key}
+                              type="button"
+                              onClick={() => setPretend(m.key)}
+                              className="flex w-full items-center gap-3 border border-rule bg-plate px-4 py-3.5 text-left transition-colors hover:border-ink"
+                            >
+                              <span className="h-4 w-4 shrink-0 rounded-full border border-rule" aria-hidden />
+                              <span className="flex-1 text-sm font-medium">{m.name}</span>
+                              <span className="note">{m.note}</span>
+                            </button>
+                          ))}
+                        </div>
                       </>
                     )}
 
@@ -1049,7 +1090,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                         )}
 
                         <FundingSource
-                          funding={funding}
+                          funding={activeFunding}
                           providerName={connection?.brokerName ?? null}
                           payingWith={asset}
                           onChangeAccount={() => startPayment(true)}
@@ -1062,7 +1103,6 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                         >
                           {busy ? 'Opening…' : `Pay ${usd(PRODUCT.price + HANDLING_FEE)}`}
                         </button>
-                        <SandboxNotice compact />
                       </>
                     )}
                     <div

@@ -92,6 +92,7 @@ export function Portfolio({
     p => quoteFor(p.symbol)?.eligible === null && p.amount > 0
   )
   const choosable = payable.length ? payable : unpriced
+  const selectedQuote = quoteFor(selected)
   const chosenSymbols = new Set(choosable.map(p => p.symbol))
   const rest = positions.filter(p => !chosenSymbols.has(p.symbol))
 
@@ -162,6 +163,22 @@ export function Portfolio({
             })}
           </ul>
         </>
+      )}
+
+      {/**
+       * The trap a live demo must not walk into.
+       *
+       * The merchant genuinely accepts three stablecoins and the quote says all three are eligible,
+       * but that quote is priced against the production broker, not the sandbox one. Picking PYUSD
+       * sent Mesh to an onramp with its own sign-in, which the demo test account does not open, and
+       * the run ended on "Invalid credentials" with nothing on our side explaining why.
+       */}
+      {selectedQuote && !selectedQuote.primary && (
+        <p className="note mt-3" style={{ color: 'var(--color-warn)' }}>
+          Only {PRODUCT.settlement.symbol} has been run end to end in this sandbox. Mesh may route
+          another asset through an onramp with its own sign-in, which the demo test account does not
+          cover.
+        </p>
       )}
 
       {quotes === null && (

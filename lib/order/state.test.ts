@@ -218,6 +218,35 @@ describe('failure states', () => {
   })
 
   /**
+   * Real payload, 4 September. The same dead stored token, on a connect session this time, and
+   * Mesh gave no useful message at all. Nothing in the text identifies it, so the fact that we
+   * handed Link a stored token id is what makes it diagnosable.
+   */
+  it('treats a bare configure error as a dead token when a stored one was passed in', () => {
+    const event: LinkEventType = {
+      type: 'transferConfigureError',
+      payload: { errorMessage: 'An error has occurred.', requestId: 'bef17c55' }
+    } as unknown as LinkEventType
+
+    const reused = reduceOrder(initialOrderState(), {
+      type: 'link',
+      at: T,
+      event,
+      reusedTokens: true
+    })
+    expect(reused.failure?.code).toBe('connection_expired')
+
+    // Without a stored token there is nothing to blame, so it stays an expired session.
+    const fresh = reduceOrder(initialOrderState(), {
+      type: 'link',
+      at: T,
+      event,
+      reusedTokens: false
+    })
+    expect(fresh.failure?.code).toBe('session_expired')
+  })
+
+  /**
    * Real sequence, captured 4 September, from a payment session opened with a stored token Mesh
    * had stopped accepting. Both events arrived in the same millisecond, in this order.
    */

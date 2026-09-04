@@ -141,7 +141,12 @@ export type OrderEvent =
   | { type: 'holdings:done'; at: number; institution: string | null; usdc: number | null; positions: number }
   | { type: 'holdings:failed'; at: number; failure: Failure }
   | { type: 'pay:started'; at: number }
-  | { type: 'link'; at: number; event: LinkEventType }
+  /**
+   * `reusedTokens` records whether this Link session was opened with a stored Mesh token id.
+   * `transferConfigureError` does not always say what went wrong, and that fact is what separates
+   * "the token we handed it is dead" from "the session expired".
+   */
+  | { type: 'link'; at: number; event: LinkEventType; reusedTokens?: boolean }
   | { type: 'settled'; at: number; txHash?: string | null }
   | { type: 'settlement:timeout'; at: number; reason: string }
   | { type: 'failed'; at: number; failure: Failure }
@@ -249,7 +254,7 @@ export function reduceOrder(state: OrderState, action: OrderEvent): OrderState {
       }
 
     case 'link':
-      return applyLinkEvent(state, action.event, action.at)
+      return applyLinkEvent(state, action.event, action.at, action.reusedTokens ?? false)
   }
 }
 
@@ -283,7 +288,12 @@ function redactPayload(event: LinkEventType): unknown {
   }
 }
 
-function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): OrderState {
+function applyLinkEvent(
+  state: OrderState,
+  event: LinkEventType,
+  at: number,
+  reusedTokens: boolean
+): OrderState {
   const next: OrderState = {
     ...state,
     log: [...state.log, { at, type: event.type, payload: redactPayload(event) }]
@@ -560,7 +570,18 @@ function applyLinkEvent(state: OrderState, event: LinkEventType, at: number): Or
         ...next,
         status: 'failed',
         failure: failure(
-          isDeadTokenEvent(event.payload.errorMessage) ? 'connection_expired' : 'session_expired',
+          /**
+           * Mesh does not always say. A dead stored token produced "Please login again to
+           * continue." once and a bare "An error has occurred." the next time, on a connect
+           * session that had been handed the same dead token id. The message is not reliable, but
+           * whether we passed a stored token is, so it decides when the text does not.
+           *
+           * Wrong in this direction costs one reconnect. Wrong in the other leaves the shopper in
+           * a loop that nothing on screen can clear, which is the failure this keeps rediscovering.
+           */
+          isDeadTokenEvent(event.payload.errorMessage) || reusedTokens
+            ? 'connection_expired'
+            : 'session_expired',
           { detail: event.payload.errorMessage, reference: event.payload.requestId }
         )
       }
