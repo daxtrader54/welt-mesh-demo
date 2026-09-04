@@ -43,14 +43,20 @@ export async function POST(req: Request) {
     }
 
     const sid = await ensureSessionId()
-    if (!(await underRateLimit(sid))) {
-      return fail(failure('rate_limited', { detail: 'Too many link tokens for this session' }), 429)
-    }
-
     const env = meshEnv()
     const userId = meshUserId(sid)
 
+    /**
+     * Counted after validation, not before. Previously a client sending twenty malformed bodies
+     * locked itself out for a minute without ever reaching Mesh, which is a live-demo footgun and
+     * protects nothing.
+     */
+    const withinLimit = async () => underRateLimit(sid)
+
     if (parsed.data.intent === 'connect') {
+      if (!(await withinLimit())) {
+        return fail(failure('rate_limited', { detail: 'Too many link tokens for this session' }), 429)
+      }
       const res = await createConnectToken({
         userId,
         integrationId: parsed.data.integrationId ?? env.coinbaseIntegrationId
@@ -70,6 +76,10 @@ export async function POST(req: Request) {
         }),
         400
       )
+    }
+
+    if (!(await withinLimit())) {
+      return fail(failure('rate_limited', { detail: 'Too many link tokens for this session' }), 429)
     }
 
     const session = await getSession(sid)

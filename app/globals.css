@@ -15,13 +15,19 @@
   --color-ground: #f2f0ea;
   --color-plate: #ffffff;
   --color-ink: #15171a;
-  --color-muted: #6b7078;
-  --color-faint: #9aa0a6;
+  --color-muted: #666b73;
+  --color-faint: #767c83;
   --color-rule: #d8d4c8;
   --color-rule-strong: #b6b1a3;
   --color-accent: #c8f135;
-  --color-accent-deep: #94b81c;
+  --color-accent-deep: #7d9c17;
   --color-warn: #b4471f;
+  /**
+   * Success, and deliberately not the colourway accent. The accent is a per-colourway value for
+   * callout lines and swatch rings; three of the four fail contrast as a foreground, and the black
+   * colourway would render every tick and stamp in grey, so success would read as disabled.
+   */
+  --color-positive: #5e7f12;
 
   --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
@@ -35,6 +41,16 @@
 html {
   background: var(--color-ground);
   color-scheme: light;
+}
+
+/**
+ * Tailwind v4 dropped `cursor: pointer` from its button preflight. Every control in this app is a
+ * button and there are no anchors, so without this nothing in the shop shows a pointer and the
+ * whole thing feels like a mockup on the first mouse movement.
+ */
+button:not(:disabled),
+[role='button']:not([aria-disabled='true']) {
+  cursor: pointer;
 }
 
 body {
@@ -148,6 +164,13 @@ body {
   .stamp,
   .print-row {
     animation: none;
+  }
+  /* Hover scales and the page-change scroll are the vestibular triggers, not the 160ms stamps. */
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

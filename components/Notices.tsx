@@ -25,10 +25,7 @@ export function FailureNotice({
       className="border border-rule bg-plate p-5"
       style={{ borderLeft: '3px solid var(--color-warn)' }}
     >
-      <div className="label" style={{ color: 'var(--color-warn)' }}>
-        {failure.code.replace(/_/g, ' ')}
-      </div>
-      <p className="mt-1.5 text-base font-medium">{failure.title}</p>
+      <p className="text-base font-medium">{failure.title}</p>
       {failure.hint && <p className="mt-1 text-sm text-muted">{failure.hint}</p>}
 
       <div className="mt-4 flex items-center gap-5">
@@ -64,11 +61,14 @@ export function FailureNotice({
  */
 export function SandboxNotice({ compact = false }: { compact?: boolean }) {
   return (
-    <div className={`border border-rule bg-plate ${compact ? 'px-4 py-3' : 'p-5'}`}>
-      <div className="label">Mesh sandbox · no real account, no real money</div>
-      <p className="mt-1.5 text-sm">
-        Sign in with the test account below. Do not use real exchange credentials.
+    <div
+      className={`border border-rule bg-plate ${compact ? 'px-4 py-3' : 'p-5'}`}
+      style={{ borderLeft: '3px solid var(--color-warn)' }}
+    >
+      <p className="text-sm font-semibold" style={{ color: 'var(--color-warn)' }}>
+        Mesh sandbox. Do not use real exchange credentials.
       </p>
+      <p className="mt-1 text-sm">Sign in with the test account below.</p>
       <dl className="data mt-3 flex flex-wrap gap-x-6 gap-y-1 text-sm">
         <div className="flex gap-2">
           <dt className="label">User</dt>

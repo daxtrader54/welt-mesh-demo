@@ -25,10 +25,14 @@ describe('clientFeeRatio', () => {
     expect(clientFeeRatio(-1, 50)).toBe(0)
   })
 
-  /** Mesh rejects anything outside 0-1, and a fee bigger than the order is a config mistake. */
-  it('never exceeds one, however badly it is configured', () => {
-    expect(clientFeeRatio(500, 50)).toBe(1)
-    expect(clientFeeRatio(50, 50)).toBe(1)
+  /**
+   * A fee at or above the order price is a configuration mistake. Clamping it to 1 would quietly
+   * double what the customer pays, so it is refused and nothing is sent to Mesh.
+   */
+  it('refuses a fee that is not smaller than the order, rather than clamping it', () => {
+    expect(clientFeeRatio(500, 50)).toBe(0)
+    expect(clientFeeRatio(50, 50)).toBe(0)
+    expect(clientFeeRatio(49.99, 50)).toBeCloseTo(0.9998)
   })
 
   it('does not divide by zero', () => {

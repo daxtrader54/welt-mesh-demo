@@ -34,11 +34,21 @@ const REVIEWS = [
 
 const AVERAGE = 4.7
 
+/**
+ * Filled against outline, not colour against colour. The previous version drew filled stars in the
+ * colourway accent and empty ones in faint grey, which on the default colourway is 1.18:1 between
+ * the two: four stars and five stars were indistinguishable, and identical outright to anyone with
+ * a red-green deficiency.
+ */
 function Stars({ n }: { n: number }) {
   return (
-    <span className="data text-sm tracking-[0.15em]" style={{ color: 'var(--plate-accent)' }} aria-label={`${n} out of 5`}>
+    <span
+      role="img"
+      aria-label={`${n} out of 5`}
+      className="data text-sm tracking-[0.15em] text-ink"
+    >
       {'★'.repeat(n)}
-      <span className="text-faint">{'★'.repeat(5 - n)}</span>
+      <span className="text-muted">{'☆'.repeat(5 - n)}</span>
     </span>
   )
 }

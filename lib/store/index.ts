@@ -27,7 +27,12 @@ export type Store = {
 }
 
 function redisStore(url: string, token: string): Store {
-  const redis = new Redis({ url, token })
+  /**
+   * The client defaults to five retries with exponential backoff, which is about twelve seconds of
+   * sleeps with no request timeout. The rate limiter sits in front of the Mesh call on the pay
+   * path, so those defaults turn a store hiccup into a dead button and then an unexplained error.
+   */
+  const redis = new Redis({ url, token, retry: { retries: 1, backoff: () => 250 } })
   return {
     kind: 'redis',
     async get<T>(key: string) {
