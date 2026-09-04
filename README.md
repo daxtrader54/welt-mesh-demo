@@ -313,6 +313,16 @@ a total that does not add up.
 
 ---
 
+## What we learned about Mesh
+
+`MESH-NOTES.md` is the integration log: every restriction, undocumented shape and wrong turn found
+building this, marked by whether it was measured, documented, or still unknown. The three endpoints
+that want three different broker type names for the same connection, the two unrelated shapes a
+refused token arrives in, the fee that is smaller than a cent, and the six questions the docs do not
+answer. It is the part most likely to be useful to somebody else.
+
+---
+
 ## Decisions and tradeoffs
 
 The reasoning, because it is the part that transfers. Each of these was a real fork.
