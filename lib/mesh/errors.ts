@@ -37,6 +37,27 @@ export function isDeadToken(
 }
 
 /**
+ * Which failure a holdings read should report, from whichever shape the answer arrived in.
+ *
+ * There are two, and having classified only one of them is what shipped the bug twice. A token
+ * Mesh cannot parse is rejected by the API with HTTP 400 and an `errorType`. A token that is well
+ * formed and simply no longer accepted gets past the API into the integration, which answers
+ * HTTP 200 with a failed `content.status` and `content.errorMessage: "Unauthorized token"` and no
+ * `errorType` at all.
+ *
+ * Both callers ask this one function so a third shape cannot quietly get a different answer.
+ */
+export function holdingsFailureCode(input: {
+  httpStatus?: number
+  errorType?: string | null
+  message?: string | null
+}): 'connection_expired' | 'portfolio_failed' {
+  return isDeadToken(input.httpStatus, input.errorType, input.message)
+    ? 'connection_expired'
+    : 'portfolio_failed'
+}
+
+/**
  * The same question, asked of a Link event rather than an API response.
  *
  * A stored token that Mesh will not accept fails on both paths, and this is the one that proves it.

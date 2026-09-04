@@ -4,7 +4,7 @@ Written 4 September 2026, updated the same day. Delete this file before the work
 
 Everything through `ca71586` is committed and pushed to `daxtrader54/welt-mesh-demo`, deployed at
 https://welt-mesh-demo.vercel.app. There are uncommitted changes on top of it, listed at the bottom.
-83 tests pass, typecheck and build are clean.
+86 tests pass, typecheck and build are clean.
 
 The README is the real documentation: what it does, how it is put together, and a Decisions and
 tradeoffs section covering every fork worth explaining. This file is only the to-do list.
