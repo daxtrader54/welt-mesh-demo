@@ -127,18 +127,6 @@ export function Receipt({
               sizes="64px"
               className="object-contain p-1"
             />
-            {/* The one easter egg that survived the redesign, moved off the big product plate and
-                onto the thing a confirmation actually shows. */}
-            <span
-              className="stamp data absolute -right-1.5 -top-1.5 border-2 bg-plate px-1 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em]"
-              style={{
-                borderColor: 'var(--color-positive)',
-                color: 'var(--color-positive)',
-                transform: 'rotate(-8deg)'
-              }}
-            >
-              Yours
-            </span>
           </div>
           <div className="min-w-0 flex-1">
             <div className="text-sm font-semibold leading-tight">

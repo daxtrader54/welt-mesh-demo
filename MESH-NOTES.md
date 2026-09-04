@@ -219,6 +219,12 @@ The webhook body is **PascalCase**, unlike every other endpoint.
 Register the callback under the **Sandbox** Transfer Webhook Callback URI, not the production one,
 which never fires against a sandbox base URL. The secret is shown once.
 
+**Sandbox delivery is not guaranteed and is visibly intermittent.** Measured across a single
+afternoon: several payments settled within seconds of `transferCompleted`, and several never
+received a delivery at all despite an endpoint proven correct by the local harness minutes earlier.
+Design for it. The receipt must be complete and correct at `paid`, with settlement an upgrade that
+may never arrive, or a demo will look broken for reasons entirely outside your code.
+
 `scripts/webhook-check.mjs` in this repo proves the endpoint without waiting for Mesh: signed
 delivery accepted, replay deduplicated, forged signature refused, unsigned refused, and the same
 JSON re-serialised refused. If that passes and settlement still does not appear, nothing arrived.
