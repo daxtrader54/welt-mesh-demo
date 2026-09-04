@@ -45,8 +45,7 @@ const spec = (n: string) => SPEC.find(s => s.n === n)
 export function ProductPlate({
   colourway,
   plate,
-  onPlateChange,
-  owned = false
+  onPlateChange
 }: {
   colourway: ColourwayId
   plate: PlateId
@@ -115,19 +114,6 @@ export function ProductPlate({
         )}
 
         <span className="label absolute bottom-3 left-3">{plate}</span>
-
-        {owned && (
-          <span
-            className="stamp data absolute right-5 top-5 border-2 px-3 py-1.5 text-sm font-bold uppercase tracking-[0.2em]"
-            style={{
-              borderColor: 'var(--color-positive)',
-              color: 'var(--color-positive)',
-              transform: 'rotate(-6deg)'
-            }}
-          >
-            Yours
-          </span>
-        )}
       </div>
 
       <div className="mt-2 grid grid-cols-5 gap-2">
