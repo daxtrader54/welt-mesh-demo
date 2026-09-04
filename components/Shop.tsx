@@ -536,11 +536,33 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       }
       attempts += 1
       try {
+        const started = Date.now()
         const res = await fetch(`/api/orders/${orderId}`)
         const json = await res.json()
         if (json.ok && json.order?.status === 'settled') {
+          /**
+           * The webhook arrives server to server, so the browser never sees it as a request and it
+           * was missing from the session log entirely: the trace showed a payment authorised and
+           * then a blank Settled row with no evidence anyone had ever looked. This is the poll that
+           * found it, logged with the round trip that carried the answer.
+           */
+          note(
+            `GET /api/orders/:id (poll ${attempts})`,
+            'settled by Mesh webhook',
+            Date.now() - started,
+            true
+          )
           dispatch({ type: 'settled', at: Date.now(), txHash: json.order.txHash })
           return
+        }
+        // Only the last unsuccessful poll is logged, so twelve identical lines do not bury the run.
+        if (attempts >= 12) {
+          note(
+            `GET /api/orders/:id (${attempts} polls)`,
+            'no webhook received',
+            Date.now() - started,
+            false
+          )
         }
       } catch {
         // Ignore. The next tick tries again, and the receipt is complete without this.
@@ -553,7 +575,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       cancelled = true
       clearTimeout(timer)
     }
-  }, [order.status, orderId])
+  }, [order.status, orderId, note])
 
   const reset = useCallback(async () => {
     await fetch('/api/session/reset', { method: 'POST' }).catch(() => {})
