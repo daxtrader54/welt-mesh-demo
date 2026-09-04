@@ -220,11 +220,25 @@ payload, never a hardcoded `"coinbase"`. The sandbox returns `sandboxCoinbase` a
 neither is in the SDK's published `BrokerType` union.
 
 Then `POST /api/v1/transfers/managed/quote` per accepted asset. It returns `isEligible`, a reason
-code, the fee total, and `fundingOptions`, which is the interesting one:
-`existingCryptocurrencyBalance`, `buyingPowerPurchase`, `paymentMethodDepositUsage`. So the page can
-say a payment would come from a balance, from buying power, or from a card on file. Comparing a
-balance against a price would have missed the withdrawal minimum, the fees, and the fact that Mesh
-can cover a shortfall. Documented as Coinbase-only for now, and the UI says so.
+code, a fee range, and `fundingOptions`, which is the interesting one: `existingCryptocurrencyBalance`,
+`buyingPowerPurchase`, `paymentMethodDepositUsage`. So the page can say a payment would come from a
+balance, from buying power, or from a card on file. Comparing a balance against a price would have
+missed the withdrawal minimum, the fees, and the fact that Mesh can cover a shortfall.
+
+**This endpoint takes production broker types only, and it is the only one that does.** A sandbox
+Coinbase connection is `sandboxCoinbase` everywhere else, and `holdings/get` requires exactly that
+string, but the quote endpoint answers it with *"Broker SandboxCoinbase not supported."* So every
+quote in every sandbox run returned 400 until `quoteBrokerType` was added to map it to `coinbase`.
+The symptom was the shop reporting an account holding 9,397 USDC as unable to pay for a $50 order,
+with no asset picker at all, because the picker only lists assets Mesh has confirmed. It is also
+still Coinbase-only in the wider sense: `binance` is not a value this endpoint's `BrokerType` enum
+accepts, so a Binance connection gets an honest unknown rather than an answer.
+
+Fees are read but not printed as the amount charged, and that is deliberate. The quote is priced
+against the production broker while the sandbox transfer charges its own fee, which was 0.01 USDC.
+Quoting one and charging the other would be worse than saying nothing, so the checkout states that
+the exchange adds a withdrawal fee without inventing a figure, and the receipt shows the real
+arithmetic afterwards.
 
 Fetched *behind* the holdings, so five Mesh calls do not stand between the shopper and the first
 number on screen.

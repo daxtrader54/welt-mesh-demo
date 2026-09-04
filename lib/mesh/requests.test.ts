@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildConnectTokenBody, buildPaymentTokenBody } from './requests'
+import { buildConnectTokenBody, buildPaymentTokenBody, quoteBrokerType } from './requests'
 
 const ETHEREUM = 'e3c7fdd8-b1fc-4e51-85ae-bb276e075611'
 const MERCHANT = '0x0Ff0000f0A0f0000F0F000000000ffFf00f0F0f0'
@@ -64,5 +64,35 @@ describe('buildPaymentTokenBody', () => {
   /** Deliberate: the shopper keeps the choice of funding source inside Link. */
   it('does not deep-link the payment session to one provider', () => {
     expect(payment()).not.toHaveProperty('integrationId')
+  })
+})
+
+/**
+ * Measured against the sandbox on 4 September. `transfers/managed/quote` is the one endpoint that
+ * will not take a sandbox broker type, and passing one through meant every quote in every sandbox
+ * run returned 400 and the shop reported an account holding 9,397 USDC as unable to pay.
+ */
+describe('quoteBrokerType', () => {
+  it('maps a sandbox broker to the production name the quote endpoint accepts', () => {
+    // sandboxCoinbase -> 400 "Broker SandboxCoinbase not supported."; coinbase -> isEligible true.
+    expect(quoteBrokerType('sandboxCoinbase')).toBe('coinbase')
+  })
+
+  it('leaves a production broker type alone', () => {
+    expect(quoteBrokerType('coinbase')).toBe('coinbase')
+    expect(quoteBrokerType('kraken')).toBe('kraken')
+  })
+
+  /**
+   * The sandbox Binance entry reports itself as plain `sandbox`, with no broker name underneath.
+   * There is nothing to map it to, and the quote endpoint rejects `binance` as well, so it goes
+   * through unchanged and the answer comes back as an honest unknown.
+   */
+  it('passes through a bare sandbox type rather than inventing one', () => {
+    expect(quoteBrokerType('sandbox')).toBe('sandbox')
+  })
+
+  it('does not mangle a name that merely starts with the same letters', () => {
+    expect(quoteBrokerType('sandboxed')).toBe('sandboxed')
   })
 })

@@ -85,12 +85,6 @@ export type CryptoPosition = z.infer<typeof cryptoPosition>
  * cost — including whether the money comes from a balance the shopper already holds, from buying
  * power, or from a card they have on file at the exchange.
  */
-const feeAmount = z.object({
-  amountInFiat: z.number().nullish(),
-  amountInCryptocurrency: z.number().nullish(),
-  cryptocurrencySymbol: z.string().nullish()
-})
-
 export const quoteResponse = envelope.extend({
   content: z
     .object({
@@ -98,22 +92,41 @@ export const quoteResponse = envelope.extend({
       ineligibilityReason: z.string().nullish(),
       minEligibleAmountFiat: z.number().nullish(),
       maxAmountFiat: z.number().nullish(),
+      /**
+       * Written against the real response, not the one that looked plausible.
+       *
+       * The previous shape read `fees.totalFeesInFiat` and
+       * `fundingOptions[].cryptocurrencyFundingOptionType`. Neither field exists. Because every
+       * field here is `.nullish()`, both parsed cleanly and returned null forever, so the funding
+       * line never rendered and the fee was always unknown. Same failure as the providers
+       * endpoint, where `content.integrations` was read from a response carrying `content.items`,
+       * and a typecheck cannot see either of them.
+       *
+       * Fees come back as a range, split fiat and crypto, because the cost depends on which
+       * funding option is used.
+       */
       fees: z
         .object({
-          totalFeesInFiat: z.number().nullish(),
-          networkFee: feeAmount.nullish(),
-          institutionFee: feeAmount.nullish(),
-          tradingFee: feeAmount.nullish(),
-          partnerFee: feeAmount.nullish()
+          inFiat: z
+            .object({
+              minFeesFiat: z.number().nullish(),
+              maxFeesFiat: z.number().nullish(),
+              networkFeeFiat: z.number().nullish(),
+              tradingFeeMaxFiat: z.number().nullish(),
+              withdrawalFeeFiat: z.number().nullish(),
+              paymentMethodFeeMaxFiat: z.number().nullish(),
+              partnerFeeFiat: z.number().nullish()
+            })
+            .nullish()
         })
         .nullish(),
       fundingOptions: z
         .array(
           z.object({
-            cryptocurrencyFundingOptionType: z.string().nullish(),
+            fundingOption: z.string().nullish(),
             paymentMethodType: z.string().nullish(),
-            name: z.string().nullish(),
-            usedAmountInFiat: z.number().nullish()
+            paymentMethodFeeFiat: z.number().nullish(),
+            tradingFeeFiat: z.number().nullish()
           })
         )
         .nullish()
