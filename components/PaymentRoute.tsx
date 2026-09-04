@@ -1,0 +1,175 @@
+'use client'
+
+import { clockTime, token, usd } from '@/lib/format'
+import { PRODUCT } from '@/lib/product'
+import type { OrderState } from '@/lib/order/state'
+
+/**
+ * The manifest. The one thing in this build that is meant to be memorable.
+ *
+ * Every row is stamped by a real SDK event. Nothing runs on a timer, nothing is inferred from
+ * elapsed time, and a row whose event never fires stays visibly blank with a dashed clock. That
+ * is the honest outcome, and in a demo it is the interesting one, because it shows exactly where
+ * a flow stopped rather than spinning until someone gives up.
+ */
+
+export type Funding = {
+  provider: string
+  accountName: string | null
+  settlement: { symbol: string; amount: number; marketValue: number | null; covers: boolean } | null
+}
+
+export function FundingSource({
+  funding,
+  onChangeAccount
+}: {
+  funding: Funding
+  onChangeAccount: () => void
+}) {
+  const s = funding.settlement
+
+  return (
+    <section className="rule-t pt-4">
+      <div className="label mb-3">Paying from</div>
+
+      <div className="flex items-start justify-between gap-6">
+        <div>
+          <div className="text-lg font-semibold leading-tight">{funding.provider}</div>
+          {funding.accountName && <div className="note">{funding.accountName}</div>}
+        </div>
+
+        {s && (
+          <div className="text-right">
+            <div className="data text-lg font-medium">{token(s.amount, s.symbol)}</div>
+            {s.marketValue !== null && <div className="label">{usd(s.marketValue)}</div>}
+          </div>
+        )}
+      </div>
+
+      {s ? (
+        <div className="mt-4 grid grid-cols-[1fr_auto_1fr] items-center gap-3 border border-rule bg-plate px-4 py-3">
+          <div>
+            <div className="label">You hold</div>
+            <div className="data text-sm">{token(s.amount, s.symbol)}</div>
+          </div>
+          <div aria-hidden className="data text-faint">
+            →
+          </div>
+          <div className="text-right">
+            <div className="label">Merchant receives</div>
+            <div className="data text-sm">
+              {usd(PRODUCT.price)} {PRODUCT.settlement.symbol}
+            </div>
+            <div className="label">on {PRODUCT.settlement.network}</div>
+          </div>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm text-muted">
+          We could not read a {PRODUCT.settlement.symbol} balance for this account. You can still
+          continue and choose another account.
+        </p>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+        <p className="text-sm text-muted">
+          {s?.covers
+            ? `Enough ${s.symbol} to cover this order.`
+            : `This account cannot cover ${usd(PRODUCT.price)} in ${PRODUCT.settlement.symbol}.`}
+        </p>
+        <button type="button" onClick={onChangeAccount} className="btn-quiet">
+          Change account
+        </button>
+      </div>
+    </section>
+  )
+}
+
+const STATE_MARK: Record<string, string> = {
+  pending: '·',
+  active: '›',
+  done: '✓',
+  failed: '×'
+}
+
+/**
+ * Full width, with a heading and a line of explanation. It sat at the tail of a narrow column in
+ * the first pass and got read as an afterthought, which for the one memorable thing in the build
+ * is the wrong outcome.
+ */
+export function Manifest({ order }: { order: OrderState }) {
+  const done = order.steps.filter(s => s.state === 'done').length
+
+  return (
+    <section className="rule-t mt-14 pt-6">
+      <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight">Payment trace</h2>
+          <p className="mt-1 max-w-xl text-sm text-muted">
+            Every row is stamped by a real Mesh event as it arrives. Nothing here runs on a timer,
+            so a row that stays blank is a step that genuinely did not happen.
+          </p>
+        </div>
+        <span className="data text-sm text-muted">
+          {done} / {order.steps.length}
+        </span>
+      </div>
+
+      <ol className="rule-t">
+        {order.steps.map((step, i) => {
+          const isDone = step.state === 'done'
+          const failed = step.state === 'failed'
+          const active = step.state === 'active'
+
+          return (
+            <li
+              key={step.id}
+              className={`rule-b py-3 ${isDone || failed ? 'stamp' : ''}`}
+              style={{ opacity: isDone || failed ? 1 : active ? 0.7 : 0.35 }}
+            >
+              <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1.5">
+                <span className="data w-7 shrink-0 text-xs text-faint">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <span
+                  className="data w-4 shrink-0 text-sm"
+                  style={{
+                    color: failed ? 'var(--color-warn)' : isDone ? 'var(--plate-accent)' : undefined
+                  }}
+                  aria-hidden
+                >
+                  {STATE_MARK[step.state]}
+                </span>
+                <span className={`w-48 shrink-0 text-sm ${isDone || failed ? 'font-medium' : ''}`}>
+                  {step.label}
+                </span>
+
+                <dl className="flex min-w-0 flex-1 flex-wrap gap-x-6 gap-y-1">
+                  {step.facts.map(f => (
+                    <div key={f.label} className="flex min-w-0 items-baseline gap-1.5">
+                      <dt className="label shrink-0">{f.label}</dt>
+                      <dd className="data max-w-[26ch] truncate text-xs" title={f.value}>
+                        {f.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+
+                <span className="data shrink-0 text-xs text-faint">
+                  {step.at ? clockTime(step.at) : '--:--:--'}
+                </span>
+              </div>
+            </li>
+          )
+        })}
+      </ol>
+
+      {order.status === 'paid' && (
+        <p className="mt-4 max-w-2xl text-sm text-muted">
+          Settled stays open until Mesh sends a signed webhook. The browser reporting a completed
+          transfer means the provider acknowledged it, which is not the same as the merchant being
+          paid, so it is not what marks the order settled.
+        </p>
+      )}
+    </section>
+  )
+}

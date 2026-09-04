@@ -1,0 +1,170 @@
+@import 'tailwindcss';
+
+/**
+ * WELT: a technical spec sheet.
+ *
+ * One warm neutral ground, graphite type, and a single acid accent that only ever marks the
+ * action. Product plates sit on pure white, which reads as a drawing plate against the ground
+ * and saves knocking out twenty photographs.
+ *
+ * The colourway accent is a separate role, set per selection, and it never touches the pay
+ * button. Choosing the black colourway must not turn the primary action grey.
+ */
+
+@theme {
+  --color-ground: #f2f0ea;
+  --color-plate: #ffffff;
+  --color-ink: #15171a;
+  --color-muted: #6b7078;
+  --color-faint: #9aa0a6;
+  --color-rule: #d8d4c8;
+  --color-rule-strong: #b6b1a3;
+  --color-accent: #c8f135;
+  --color-accent-deep: #94b81c;
+  --color-warn: #b4471f;
+
+  --font-display: var(--font-archivo), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, SFMono-Regular, monospace;
+}
+
+:root {
+  /* Overwritten per colourway. Callout lines and the selected swatch ring only. */
+  --plate-accent: #7fbf2a;
+}
+
+html {
+  background: var(--color-ground);
+  color-scheme: light;
+}
+
+body {
+  background: var(--color-ground);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Data is monospace. Prose never is. This is the whole typographic rule. */
+.data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Short labels only. Two or three words. A paragraph set in uppercase mono is a wall. */
+.label {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+/* Supporting prose. Small, quiet, but still prose: sans, sentence case, readable. */
+.note {
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: var(--color-muted);
+}
+
+.rule-t {
+  border-top: 1px solid var(--color-rule);
+}
+.rule-b {
+  border-bottom: 1px solid var(--color-rule);
+}
+
+/* The one action colour, used once per screen. */
+.btn-primary {
+  background: var(--color-accent);
+  color: var(--color-ink);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  transition: transform 120ms ease, filter 120ms ease;
+}
+.btn-primary:hover:not(:disabled) {
+  filter: brightness(1.04);
+}
+.btn-primary:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn-primary:disabled {
+  background: var(--color-rule);
+  color: var(--color-faint);
+  cursor: not-allowed;
+}
+
+.btn-quiet {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-rule-strong);
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.btn-quiet:hover:not(:disabled) {
+  color: var(--color-ink);
+  border-color: var(--color-ink);
+}
+
+/* Manifest rows arrive one at a time as their real event lands. Short and unfussy: a live
+   demo does not need a row that takes half a second to settle. */
+@keyframes stamp {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.stamp {
+  animation: stamp 160ms ease-out both;
+}
+
+/* The receipt prints. One easter egg, and it is over in well under a second per row. */
+@keyframes print-row {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+    clip-path: inset(0 0 100% 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    clip-path: inset(0 0 0 0);
+  }
+}
+.print-row {
+  animation: print-row 240ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stamp,
+  .print-row {
+    animation: none;
+  }
+}
+
+/* Perforated edge for the receipt docket. */
+.perforated {
+  --notch: 7px;
+  mask-image: radial-gradient(circle at 50% 0, transparent calc(var(--notch) - 1px), #000 var(--notch));
+  mask-size: 18px 100%;
+  mask-repeat: repeat-x;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-ink);
+}
+
+*:focus-visible {
+  outline: 2px solid var(--color-ink);
+  outline-offset: 2px;
+}
