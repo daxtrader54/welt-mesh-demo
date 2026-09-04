@@ -49,7 +49,13 @@ const REASONS: Record<string, string> = {
   balanceBelowRequestedAmount: 'not enough of it',
   requestedAmountBelowMinimum: 'below the withdrawal minimum',
   requestedAmountAboveMaximum: 'above the withdrawal maximum',
-  assetNotSupported: 'not supported on this network'
+  assetNotSupported: 'not supported on this network',
+  /**
+   * Observed on Binance, where PYUSD came back ineligible while Coinbase accepted all three. Worth
+   * naming rather than printing raw: it is the exchange that will not send this asset, not the
+   * merchant refusing it and not the shopper being short.
+   */
+  notSupportedForTransferBySource: 'this exchange will not send it'
 }
 
 /**

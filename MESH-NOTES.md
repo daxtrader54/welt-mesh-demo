@@ -176,6 +176,16 @@ One residual doubt, and the experiment that would remove it: add a destination s
 does not hold, such as DAI. If a DAI holding comes back, the response echoes `toAddresses` after all
 and everything above is wrong. If it does not, the reading is confirmed. Not run.
 
+**Since strengthened.** The same three assets against a **Binance** connection returned
+`PYUSD eligible=false, ineligibilityReason: notSupportedForTransferBySource`, where Coinbase had
+returned all three eligible. So `configure` is genuinely assessing the source account and not
+echoing anything: same merchant, same destinations, same three symbols, different answer per
+exchange. Which makes BTC's absence harder to explain away.
+
+That reason code is worth handling by name, too. It means the exchange will not send that asset,
+which is neither the merchant refusing it nor the shopper being short, and those want different
+words on screen.
+
 `transferBalanceFundingAvailability.status` exists in the OpenAPI spec with values
 `disabled | available | requiresAmountLowering | notApplicable | unavailable`, but it is **not in
 the documented response example** and we have not observed it. Treat it as optional.
