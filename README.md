@@ -83,7 +83,7 @@ which variables are present, without values, and whether the store is Redis or m
 ### Scripts
 
 ```bash
-npm test                                    # 83 tests, no secrets, under a second
+npm test                                    # 86 tests, no secrets, under a second
 npm run typecheck
 node scripts/webhook-check.mjs <url>        # prove the webhook endpoint without waiting for Mesh
 node scripts/crop-product-images.mjs        # re-frame the photographs from public/product-src
@@ -463,9 +463,14 @@ Three that are non-obvious:
 
 - **A failed balance read is not fatal, unless the connection is dead.** Normally the shopper can
   still pay, they just do not get to see their holdings first, so it renders as a warning beside a
-  live pay button. The exception is Mesh refusing the stored token, which it does two ways and
-  neither is a 401: `invalidIntegrationToken` for one it does not recognise, and *Unauthorized
-  token* for one it will no longer accept. Both arrive as a 400. There, *carry on* is not honest
+  live pay button. The exception is Mesh refusing the stored token, and it says so in two shapes
+  that look nothing alike. A token it cannot parse is rejected by the API: HTTP 400,
+  `errorType: invalidIntegrationToken`. A token that is well formed and simply not accepted any
+  more gets past the API into the integration, which answers **HTTP 200** with a failed
+  `content.status` and `content.errorMessage: "Unauthorized token"` and no `errorType` at all.
+  Neither is a 401, so the status tells you nothing and both have to be read. They go through one
+  function, `holdingsFailureCode`, because classifying one and not the other is how this shipped
+  broken twice. There, *carry on* is not honest
   advice, and a session log settles why: passing the same token into a payment session produces
   `transferConfigureError` with *"Please login again to continue."* four seconds in, before the
   shopper touches anything. The payment was already broken by the same cause. So both paths now
@@ -488,7 +493,7 @@ Three that are non-obvious:
 
 ## Testing
 
-83 tests over the logic where a regression costs something: webhook HMAC verification including the
+86 tests over the logic where a regression costs something: webhook HMAC verification including the
 re-serialisation trap, `EventId` idempotency, both link token builders, the merchant fee ratio and the
 guarantee it never changes the destination amount, the provider catalogue mapping and the merchant
 ranking on top of it, what the customer was actually charged, the event to order reducer, whether a

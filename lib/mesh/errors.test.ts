@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isDeadToken, isDeadTokenEvent } from './errors'
+import { holdingsFailureCode, isDeadToken, isDeadTokenEvent } from './errors'
 
 /**
  * The two payloads below are real. `invalidIntegrationToken` was captured by posting a junk token
@@ -58,5 +58,36 @@ describe('isDeadToken', () => {
     expect(isDeadTokenEvent('The transfer session has expired.')).toBe(false)
     expect(isDeadTokenEvent('')).toBe(false)
     expect(isDeadTokenEvent(null)).toBe(false)
+  })
+})
+
+/**
+ * The two shapes a refused token arrives in. Classifying only the first shipped the bug twice:
+ * once by missing it, and once by fixing the HTTP branch and leaving the content branch alone.
+ */
+describe('holdingsFailureCode', () => {
+  it('reads the API rejection: HTTP 400 with an errorType', () => {
+    expect(
+      holdingsFailureCode({
+        httpStatus: 400,
+        errorType: 'invalidIntegrationToken',
+        message: 'Invalid integration token provided.'
+      })
+    ).toBe('connection_expired')
+  })
+
+  /**
+   * The one a real shopper hit. A well-formed token that Mesh no longer accepts gets past the API
+   * into the integration, which answers HTTP 200 with a failed content status, no errorType, and
+   * this message. Nothing but the text identifies it.
+   */
+  it('reads the integration rejection: HTTP 200, no errorType, message only', () => {
+    expect(holdingsFailureCode({ message: 'Unauthorized token' })).toBe('connection_expired')
+  })
+
+  it('leaves a genuine holdings problem as a warning', () => {
+    expect(holdingsFailureCode({ message: 'holdings status: pending' })).toBe('portfolio_failed')
+    expect(holdingsFailureCode({ httpStatus: 429, message: 'Too many requests' })).toBe('portfolio_failed')
+    expect(holdingsFailureCode({})).toBe('portfolio_failed')
   })
 })

@@ -15,7 +15,7 @@ import {
   type ConnectTokenInput,
   type PaymentTokenInput
 } from './requests'
-import { isDeadToken } from './errors'
+import { holdingsFailureCode } from './errors'
 
 /**
  * The whole Mesh surface this app touches: three endpoints, one fetch helper.
@@ -161,27 +161,40 @@ export async function getPortfolio(authToken: string, brokerType: string): Promi
     // Rebuilt rather than spread: `failure()` looks up title, hint and retryable from the code at
     // construction, so overriding only `code` leaves the link-token copy attached to a holdings
     // error and the shopper reads "We could not start the payment" about their balances.
-    const dead = isDeadToken(holdings.status, holdings.errorType, holdings.error.detail)
     return {
       ok: false,
       ms: Date.now() - started,
       status: holdings.status,
       errorType: holdings.errorType,
-      error: failure(dead ? 'connection_expired' : 'portfolio_failed', {
-        detail: holdings.error.detail,
-        reference: holdings.error.reference
-      })
+      error: failure(
+        holdingsFailureCode({
+          httpStatus: holdings.status,
+          errorType: holdings.errorType,
+          message: holdings.error.detail
+        }),
+        { detail: holdings.error.detail, reference: holdings.error.reference }
+      )
     }
   }
 
+  /**
+   * The other half of the same failure, and the one that actually bit.
+   *
+   * A token Mesh cannot parse is rejected by the API: HTTP 400, `invalidIntegrationToken`, caught
+   * above. A token that is well formed and simply not accepted any more gets past the API into the
+   * integration, which answers **HTTP 200** with `content.status` failed and
+   * `content.errorMessage: "Unauthorized token"`. Same fault, same cure, different shape, and
+   * classifying only the HTTP branch left a returning shopper on the old dead end.
+   *
+   * There is no `errorType` at this level, so the message is all there is to read.
+   */
   const content = holdings.data.content
   if (content?.status && content.status !== 'succeeded') {
+    const detail = content.errorMessage || `holdings status: ${content.status}`
     return {
       ok: false,
       ms: Date.now() - started,
-      error: failure('portfolio_failed', {
-        detail: content.errorMessage || `holdings status: ${content.status}`
-      })
+      error: failure(holdingsFailureCode({ message: content.errorMessage }), { detail })
     }
   }
 
