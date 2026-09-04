@@ -500,8 +500,10 @@ cannot read an order or stamp it paid with a fabricated hash. 404 rather than 40
 does not confirm which ids exist.
 
 **The browser cannot name its own price.** Amount, asset, network and destination all come from server
-configuration. The client sends a colourway, a size and an asset choice validated against the
-merchant's accepted list. It can move an order to `paid`; only the webhook writes `settled`.
+configuration. The client sends a colourway, a size and an asset choice, and each is validated
+server side: the asset against the merchant's accepted list, and the size against that colourway's
+own stock, because availability differs by colour and a size that exists in Black does not exist in
+Stone. It can move an order to `paid`; only the webhook writes `settled`.
 
 **Webhook signatures** are verified with a timing-safe comparison over the raw body. A rejected
 delivery gets an empty 401, so an unauthenticated caller cannot learn how the deployment is

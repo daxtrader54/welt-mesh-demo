@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import type { Failure } from '@/lib/failure'
+import { BRAND } from '@/lib/product'
 
 /**
  * Failure states are designed here rather than left to whatever string an SDK produced.
@@ -62,7 +63,7 @@ const SMALL_PRINT = [
   'No orders are fulfilled. No goods are shipped. No shoes exist. The photographs are of a real shoe that exists somewhere, just not here.',
   'The reviews are written. Nobody bought a second pair. There is no first pair.',
   'Free delivery is free in the sense that nothing is delivered.',
-  'UK 10 and 11 are out of stock in the sense that they were never in stock.',
+  'Sizes are out of stock in the sense that they were never in stock. The numbers differ by colour so that the shop behaves like one; none of the pairs exist.',
   'Payments run against the Mesh sandbox. The exchange is simulated, the balance is simulated, and the ten million dollars of cash in it belongs to nobody.',
   'The transaction reference is issued by Mesh and resolves to nothing on Ethereum mainnet, Sepolia or Base. We checked all three before deciding not to link to an explorer.',
   'The one cent fee is real, in the sense that a simulated exchange genuinely calculated it.',
@@ -70,34 +71,66 @@ const SMALL_PRINT = [
   'Any resemblance to a functioning retailer is deliberate and not legally binding.'
 ]
 
+/**
+ * Dark, and full width to the edges of the viewport.
+ *
+ * A footer that is the same colour as the page is not a footer, it is the last paragraph. Every
+ * retailer this shop is imitating ends on a solid dark band, and it does real work: it says the
+ * page has stopped, and it gives the disclaimer somewhere to sit that reads as small print rather
+ * than as content.
+ *
+ * The negative margins break it out of the padded column it is rendered inside, which is the one
+ * place in this build that is worth doing, because the alternative is restructuring the whole page
+ * shell for a band at the bottom.
+ */
 export function Footer() {
   const [open, setOpen] = useState(false)
 
   return (
-    <footer className="rule-t mt-16 py-6">
-      <p className="note">
-        Demonstration store. Not affiliated with Skechers or MandM Direct. No orders are fulfilled
-        and no goods are shipped. Payments run against the Mesh sandbox.
-      </p>
-      <button
-        type="button"
-        onClick={() => setOpen(v => !v)}
-        aria-expanded={open}
-        className="btn-quiet mt-3"
-      >
-        {open ? 'Enough small print' : 'Read the small print'}
-      </button>
+    <footer
+      className="mt-16 px-5 pt-8 sm:px-6 lg:px-10"
+      style={{
+        background: 'var(--color-ink)',
+        color: 'var(--color-ground)',
+        // Clears the fixed console bar and whatever iOS puts below it, so the last line of the
+        // small print is not sitting under the bar that opens the panel.
+        paddingBottom: 'calc(8rem + env(safe-area-inset-bottom))'
+      }}
+    >
+      <div className="mx-auto max-w-[1180px]">
+        <div className="flex flex-wrap items-baseline justify-between gap-x-8 gap-y-3">
+          <span className="data text-lg font-bold tracking-[-0.02em]">{BRAND}</span>
+          <span className="data text-[11px] uppercase tracking-[0.14em] opacity-60">
+            Demonstration store
+          </span>
+        </div>
 
-      {open && (
-        <ul className="mt-4 max-w-3xl space-y-1.5">
-          {SMALL_PRINT.map((line, i) => (
-            <li key={i} className="flex gap-3">
-              <span className="data text-[10px] text-faint">{String(i + 1).padStart(2, '0')}</span>
-              <span className="note">{line}</span>
-            </li>
-          ))}
-        </ul>
-      )}
+        <p className="mt-4 max-w-2xl text-sm leading-relaxed opacity-80">
+          Not affiliated with Skechers or MandM Direct. No orders are fulfilled and no goods are
+          shipped. Payments run against the Mesh sandbox.
+        </p>
+
+        <button
+          type="button"
+          onClick={() => setOpen(v => !v)}
+          aria-expanded={open}
+          className="data mt-4 border px-3 py-2 text-[11px] uppercase tracking-[0.08em] transition-colors"
+          style={{ borderColor: 'rgba(242,240,234,0.35)', color: 'var(--color-ground)' }}
+        >
+          {open ? 'Enough small print' : 'Read the small print'}
+        </button>
+
+        {open && (
+          <ul className="mt-5 max-w-3xl space-y-2">
+            {SMALL_PRINT.map((line, i) => (
+              <li key={i} className="flex gap-3">
+                <span className="data text-[10px] opacity-50">{String(i + 1).padStart(2, '0')}</span>
+                <span className="text-[13px] leading-relaxed opacity-80">{line}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </footer>
   )
 }
