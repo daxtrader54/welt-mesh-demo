@@ -30,6 +30,22 @@ export function Receipt({
   const [expanded, setExpanded] = useState(false)
   const p = order.payment
 
+  /**
+   * Add up what the customer was actually charged.
+   *
+   * `totalAmountInFiat` from Mesh is not reliable for this: the same transfer showed $50.01 in
+   * the Link overlay and returned 50 in the completion payload, and earlier runs returned 50.01
+   * in that field. The fee breakdown on `transferPreviewed` has been consistent every time, so
+   * the arithmetic is the honest source and Mesh's own figure is shown beside it when they differ.
+   */
+  const fees = (order.fees.institution ?? 0) + (order.fees.client ?? 0) + (order.fees.gas ?? 0)
+  const computedTotal = p.amount !== null ? p.amount + fees : null
+  const totalCharged = computedTotal ?? p.totalAmountInFiat ?? PRODUCT.price
+  const meshDisagrees =
+    p.totalAmountInFiat !== null &&
+    computedTotal !== null &&
+    Math.abs(p.totalAmountInFiat - computedTotal) > 0.0001
+
   const rows: { label: string; value: string; mono?: boolean }[] = [
     { label: 'Item', value: `${PRODUCT.brand} ${PRODUCT.name}` },
     { label: 'Colour', value: `${colourway.name} · ${colourway.ref}` },
@@ -45,9 +61,12 @@ export function Receipt({
   const detail: { label: string; value: string }[] = [
     { label: 'Amount sent', value: token(p.amount, p.symbol) },
     { label: 'Exchange fee', value: token(order.fees.institution, order.fees.institutionCurrency) },
-    { label: 'Handling fee', value: token(order.fees.client, p.symbol) },
+    ...(order.fees.client ? [{ label: 'Handling fee', value: token(order.fees.client, p.symbol) }] : []),
     { label: 'Network fee', value: token(order.fees.gas ?? 0, p.symbol) },
-    { label: 'Total charged', value: usd(p.totalAmountInFiat) },
+    // Only worth a row when it contradicts the arithmetic above it, which it sometimes does.
+    ...(meshDisagrees
+      ? [{ label: 'Mesh reported total', value: usd(p.totalAmountInFiat) }]
+      : []),
     { label: 'Destination', value: p.toAddress ?? '—' },
     { label: 'Refund address', value: p.refundAddress ?? '—' },
     { label: 'Transaction', value: p.txId ?? '—' },
@@ -83,9 +102,9 @@ export function Receipt({
           style={{ animationDelay: `${rows.length * 55}ms` }}
         >
           <span className="label">Total charged</span>
-          <span className="data text-lg font-semibold">{usd(p.totalAmountInFiat ?? PRODUCT.price)}</span>
+          <span className="data text-lg font-semibold">{usd(totalCharged)}</span>
         </div>
-        {p.totalAmountInFiat !== null && p.totalAmountInFiat > PRODUCT.price && (
+        {totalCharged > PRODUCT.price && (
           <p className="note mt-1">
             Includes the exchange withdrawal fee
             {HANDLING_FEE > 0 ? ` and ${usd(HANDLING_FEE)} handling` : ''}. The destination address
@@ -112,6 +131,14 @@ export function Receipt({
                 </dd>
               </div>
             ))}
+            {meshDisagrees && (
+              <p className="note mt-3">
+                The total above is added up from the amount and the fees Mesh quoted. Mesh&apos;s
+                own <span className="data">totalAmountInFiat</span> came back as{' '}
+                {usd(p.totalAmountInFiat)} on this transfer, which does not include the withdrawal
+                fee. The arithmetic is what your account was debited.
+              </p>
+            )}
             <p className="note mt-3">
               Two different fees. The exchange charges the withdrawal and Mesh quotes it in the
               payment preview. The handling fee is the merchant own charge, sent to Mesh as
