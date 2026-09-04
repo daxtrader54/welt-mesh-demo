@@ -795,7 +795,28 @@ export function TechnicalView({
               )}
             </div>
 
-            <button type="button" onClick={onReset} className="btn-primary mt-5 px-4 py-2 text-xs">
+            {/**
+             * Reset keeps the connection on purpose, which makes a second run fast and also means
+             * it never clears the name and address. Those live in sessionStorage and survive every
+             * reset, so a demo run keeps whatever the last person typed. This is the one control
+             * that forgets them.
+             */}
+            <button
+              type="button"
+              onClick={() => {
+                try {
+                  sessionStorage.removeItem('welt_address')
+                } catch {
+                  // Private modes can refuse. Nothing to recover, the next write will fail too.
+                }
+                location.reload()
+              }}
+              className="btn-quiet mt-5 block"
+            >
+              Forget the saved delivery address
+            </button>
+
+            <button type="button" onClick={onReset} className="btn-primary mt-4 px-4 py-2 text-xs">
               Reset demo
             </button>
             <p className="note mt-2">
