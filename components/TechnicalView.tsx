@@ -492,6 +492,12 @@ export function TechnicalView({
                * verbatim rather than translated into another guess.
                */}
               {funding.assets?.length ? (
+                <>
+                  <p className="note mt-1">
+                    Asked about the merchant&apos;s accepted assets only, because those are the
+                    `toAddresses` the request carries. Everything else in the account is unassessed
+                    rather than refused.
+                  </p>
                 <ul className="mt-2">
                   {funding.assets.map(a => (
                     <li key={a.symbol} className="flex items-baseline justify-between gap-3 py-0.5">
@@ -506,6 +512,7 @@ export function TechnicalView({
                     </li>
                   ))}
                 </ul>
+                </>
               ) : (
                 <p className="note mt-1">
                   {funding.error

@@ -258,6 +258,15 @@ export function Portfolio({
                     </span>
                   ) : f ? (
                     <span className="note shrink-0">{why ?? 'not eligible for this order'}</span>
+                  ) : funding ? (
+                    /**
+                     * "Not asked" is not "refused", and showing nothing made them look identical.
+                     *
+                     * `configure` was sent the merchant's three accepted assets as `toAddresses`
+                     * and answered about exactly those three. The other eleven holdings were never
+                     * in the question, so Mesh has said nothing about them and neither should we.
+                     */
+                    <span className="note shrink-0 text-faint">not assessed</span>
                   ) : null}
                   <span className="data shrink-0 text-xs">{usd(p.marketValue)}</span>
                 </li>
