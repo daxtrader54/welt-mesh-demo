@@ -99,14 +99,14 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
       </div>
 
       {/**
-       * Two across at every width. Four products, so 2x2 is the whole range in one block.
+       * One per row on a phone, two across from `sm`. Four products, so that is 2x2 on a desktop.
        *
-       * One per row buried three of the four below the fold on a phone. Four across fixed that and
-       * introduced the opposite problem on a desktop: a 250px card holding a 3:2 frame renders the
-       * shoe about 200px wide with the rest of the card empty, which is a thumbnail strip rather
-       * than a product grid. Half the row each puts the photograph at a size worth looking at.
+       * Four across put a 3:2 frame in a 250px card and rendered the shoe about 200px wide with
+       * the rest of the card empty, which is a thumbnail strip rather than a product grid. Two
+       * across fixes that on a desktop and reintroduces it on a phone, where half of 390px is
+       * smaller again. A phone has one column; scrolling is what phones are good at.
        */}
-      <ul className="grid grid-cols-2 gap-x-3 gap-y-6 pt-5 sm:gap-x-8 sm:gap-y-10 sm:pt-10">
+      <ul className="grid grid-cols-1 gap-y-8 pt-5 sm:grid-cols-2 sm:gap-x-8 sm:gap-y-10 sm:pt-10">
         {COLOURWAYS.map((c, i) => {
           const run = sizeRunFor(c.id)
           return (
@@ -122,7 +122,7 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
                   src={plateSrc(c.id, 'lateral')}
                   alt={`${PRODUCT.name} in ${c.name}`}
                   fill
-                  sizes="(max-width: 640px) 50vw, 590px"
+                  sizes="(max-width: 640px) 100vw, 590px"
                   // The first row only. At 2x2 the other two are below the fold at every width,
                   // and the images are now half a container wide rather than a quarter, so
                   // preloading all four costs real bytes on a phone.
@@ -138,15 +138,6 @@ export function ShopFront({ onSelect }: { onSelect: (id: ColourwayId) => void })
                 >
                   -{SAVING_PERCENT}%
                 </span>
-
-                {/* The colourway's own accent, used once per card, the same rule the shop uses. */}
-                <span
-                  className="absolute right-3 top-3 h-6 w-6 border"
-                  style={{ background: c.swatch, borderColor: 'var(--color-rule)' }}
-                  aria-hidden
-                />
-
-                <span className="label absolute bottom-3 left-3">{c.ref}</span>
 
                 <span
                   className="absolute bottom-0 left-0 h-1 w-0 transition-all duration-300 group-hover:w-full"
