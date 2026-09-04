@@ -30,7 +30,11 @@ const nextConfig: NextConfig = {
           { key: 'Content-Security-Policy', value: csp },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'X-Frame-Options', value: 'DENY' }
+          { key: 'X-Frame-Options', value: 'DENY' },
+          // The page metadata carries `noindex` too, but that is a tag inside an HTML body. This
+          // covers everything that is not one: the API routes, the product images, and anything a
+          // crawler reaches without parsing.
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow, noimageindex, noarchive' }
         ]
       }
     ]
