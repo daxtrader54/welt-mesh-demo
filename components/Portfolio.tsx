@@ -139,13 +139,29 @@ export function Portfolio({
       {choosable.length > 0 && (
         <>
           <div className="rule-t mt-5 flex items-baseline justify-between gap-4 pt-3">
-            <span className="label">Settles directly</span>
+            <span className="label">What the merchant receives</span>
             <span className="note">
               {payable.length
-                ? `Merchant receives ${usd(PRODUCT.price)} on ${PRODUCT.settlement.network}`
+                ? `${usd(PRODUCT.price)} on ${PRODUCT.settlement.network}`
                 : 'Not priced in advance'}
             </span>
           </div>
+
+          {/**
+           * Relabelled, because the old heading was the source of a fair complaint.
+           *
+           * These radio buttons pick what the MERCHANT is paid in. They were introduced by "Pay
+           * with any of these", which reads as what the shopper spends, so a shopper holding
+           * $398,000 of BTC quite reasonably asked why BTC was not among them. It never could be:
+           * this list is the merchant's accepted assets, and the merchant settles in stablecoins.
+           *
+           * What the payment is funded from is a different question with a different owner, and
+           * saying so here is cheaper than letting the picker imply an answer it does not have.
+           */}
+          <p className="note mt-2">
+            Which asset the merchant is paid in. What funds it is decided at payment: Mesh spends
+            your balance in that asset, or converts another of your holdings if you are short.
+          </p>
 
           <ul className="mt-2">
             {choosable.map(p => {

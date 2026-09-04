@@ -37,6 +37,17 @@ export const HANDLING_FEE = Number.parseFloat(
  * Stablecoins only, deliberately. All three sit at roughly a dollar, so a $50 price stays a $50
  * price whichever one is used. Accepting ETH would mean showing a converted amount that moves
  * while the shopper reads it, which is a different product decision and not this one.
+ *
+ * This list is also the answer to "why can I not pay in BTC". It is the merchant's, not the
+ * shopper's: it says what arrives at the destination address, and that address is on Ethereum, so
+ * native BTC could never be in it whatever the merchant wanted. Widening it is one line here, and
+ * anything added has to survive the same question the stablecoins pass and ETH does not: does $50
+ * still mean $50 by the time the transfer lands.
+ *
+ * The shopper's side of that question is not configurable at all. Mesh's link token has no field
+ * for what a payment is funded from, so a merchant cannot choose it and cannot offer the choice.
+ * Mesh works it out at payment: your balance in the collected asset, or a conversion from another
+ * holding when that balance is short.
  */
 export const ACCEPTED_ASSETS = [
   { symbol: 'USDC', name: 'USD Coin', primary: true },
