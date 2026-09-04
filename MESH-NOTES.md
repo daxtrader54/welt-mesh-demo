@@ -57,9 +57,15 @@ that identified anything. Link then failed intermittently about a second after o
 "Unable to initiate the transfer" screen. Populate all of them from the connect payload, which means
 capturing `account.accountId` at connect time.
 
-**Do not replay a stored account into a session where the shopper asked for a different one.** Same
-symptom. Link is being handed an account to restore at the exact moment it is being asked to find a
-new one.
+**Do not replay a stored account into a connect session at all.** Same symptom, and this was the
+actual cause: "Unable to initiate the transfer. An error has occurred.", about a second after Link
+opens, with no OAuth attempted. A connect session exists to find an account. Handing it one to
+restore is a contradiction, and Mesh reports it with a message that names nothing. Keep
+`accessTokens` for the payment session, where skipping the sign-in is the point.
+
+The trap is that this looks harmless until a race exposes it. A page that only opens a connect
+session when it believes nothing is stored will still hit it on first load, before the call that
+tells it otherwise has come back, while the server attaches the account it can see.
 
 **Content-level failures are a general pattern, not a one-off.** `holdings/get` and
 `transfers/managed/configure` both answer HTTP 200 with a `content.status` that is not `succeeded`.

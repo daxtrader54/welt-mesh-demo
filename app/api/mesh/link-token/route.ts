@@ -77,7 +77,25 @@ export async function POST(req: Request) {
      * which is exactly the case a repeat demo hits.
      */
     const session = await getSession(sid)
-    const accessTokens = (parsed.data.fresh ? [] : (session?.connections ?? []))
+
+    /**
+     * Never on a connect session. This is the cause of "Unable to initiate the transfer. An error
+     * has occurred." landing about a second after Link opens, with no OAuth attempted, on a session
+     * that had done nothing yet.
+     *
+     * Replaying a stored account here was always pointless. The page does not open Link at all when
+     * it knows a connection exists; it reads the portfolio instead. So the only connect sessions
+     * that reach Mesh are ones where the shopper has no connection, or has just asked for a
+     * different account, and neither wants the old one restored. The failing case is the race
+     * between those two facts: on first load the page has not yet heard back from
+     * `GET /api/mesh/connection`, so it opens a connect session believing there is nothing stored,
+     * while the server helpfully attaches the account it does have. Link is then asked to restore
+     * an account in a flow whose entire purpose is to find one.
+     *
+     * The payment intent still gets them, which is where they earn their keep: a returning shopper
+     * goes from `pageLoaded` to `transferPreviewed` in twelve seconds with no sign-in.
+     */
+    const accessTokens = (parsed.data.intent === 'connect' ? [] : (session?.connections ?? []))
       .filter(c => c.tokenId)
       /**
        * Populated, not blank. This used to send the token id with three empty strings for
