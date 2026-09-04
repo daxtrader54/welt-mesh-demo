@@ -905,15 +905,29 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
           )}
 
           {step === 'bag' && bag && (
-            <BagView
-              item={bag}
-              onCheckout={() => goto(isComplete(address) ? 'checkout' : 'delivery')}
-              onBack={() => goto('shop')}
-              onRemove={() => {
-                setBag(null)
-                goto('shop')
-              }}
-            />
+            <>
+              <BagView
+                item={bag}
+                onCheckout={() => goto(isComplete(address) ? 'checkout' : 'delivery')}
+                onBack={() => goto('shop')}
+                onRemove={() => {
+                  setBag(null)
+                  goto('shop')
+                }}
+              />
+
+              {/**
+               * A saved address makes the bag skip the delivery step, which is the right shortcut
+               * and left the checkout's Edit as the only way to change it. Anyone whose address was
+               * remembered from an earlier run had to reach payment before they could correct it.
+               * Showing it here, where every other shop shows it, gives the second way in.
+               */}
+              {isComplete(address) && (
+                <div className="mx-auto mt-6 w-full max-w-[38rem]">
+                  <DeliverySummary address={address} onEdit={() => goto('delivery')} />
+                </div>
+              )}
+            </>
           )}
 
           {step === 'delivery' && bag && (
