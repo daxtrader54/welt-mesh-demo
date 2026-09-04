@@ -1019,9 +1019,19 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                 All colourways
               </button>
 
-              {/* Explicit grid placement, because mobile stacks in DOM order. The first pass put
-                  the entire spec sheet between the photograph and the price. */}
-              <div className="grid items-start gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
+              {/**
+               * Explicit grid placement, because mobile stacks in DOM order. The first pass put
+               * the entire spec sheet between the photograph and the price.
+               *
+               * `grid-rows-[auto_1fr]` is what stops the specification floating. The right column
+               * spans both rows and is far taller than the plate and the spec together, so the
+               * surplus height was shared between the two rows: row one grew well past the bottom
+               * of the photograph, and the spec, correctly aligned to the top of row two, started
+               * a few hundred pixels below anything. Sizing row one to its content and giving row
+               * two the remainder puts the spec back under the plate and leaves the dead space at
+               * the bottom of the column, where an unequal two-column layout has to put it.
+               */}
+              <div className="grid items-start gap-x-16 gap-y-10 py-8 md:grid-cols-[minmax(0,1fr)_minmax(0,19rem)] md:grid-rows-[auto_1fr] lg:grid-cols-[minmax(0,1fr)_minmax(0,23rem)]">
                 <section className="md:col-start-1 md:row-start-1 lg:col-start-1 lg:row-start-1">
                   <ProductPlate colourway={colourwayId} plate={plate} onPlateChange={setPlate} />
                 </section>

@@ -34,6 +34,17 @@ export function useModal<T extends HTMLElement>(enabled: boolean, onClose: () =>
 
     returnTo.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
 
+    /**
+     * Hold the page still underneath.
+     *
+     * Without this, a flick anywhere on a bottom sheet scrolls the shop behind it, and on a phone
+     * that is most of the surface. `overscroll-contain` on the sheet's own scroller stops the
+     * chaining once it has something to scroll; this stops the page moving when the touch lands
+     * somewhere that does not, like the header or the tab row.
+     */
+    const scrollLock = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+
     const focusable = () =>
       Array.from(
         node.querySelectorAll<HTMLElement>(
@@ -81,6 +92,7 @@ export function useModal<T extends HTMLElement>(enabled: boolean, onClose: () =>
     document.addEventListener('keydown', onKey, true)
     return () => {
       document.removeEventListener('keydown', onKey, true)
+      document.body.style.overflow = scrollLock
       // Only take focus back if it is still inside the thing that just closed. If something else
       // has deliberately moved it, leave it alone.
       const active = document.activeElement

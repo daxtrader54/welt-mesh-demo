@@ -375,7 +375,15 @@ export function TechnicalView({
   if (!open) return null
 
   const body = (
-    <div className="flex h-full flex-col bg-ground">
+    /**
+     * `min-h-0 flex-1`, not `h-full`.
+     *
+     * The sheet is capped at 72dvh, but this was `h-full`, which is a percentage of a parent whose
+     * height is auto, so it resolved to auto and grew to fit its content. The cap then clipped
+     * nothing and the scroll fell through to the page behind, which is the bug: on a phone you
+     * could not scroll the event list, you scrolled the shop underneath it.
+     */
+    <div className="flex min-h-0 flex-1 flex-col bg-ground">
       <div className="rule-b flex items-center justify-between px-5 py-3">
         <span className="label">Behind the payment</span>
         <button type="button" onClick={onClose} className="btn-quiet border-0">
@@ -400,7 +408,9 @@ export function TechnicalView({
         ))}
       </nav>
 
-      <div className="flex-1 overflow-auto px-5 py-4">
+      {/* `min-h-0` for the same reason as above. `overscroll-contain` stops a flick that reaches
+          the top or bottom of this list from carrying on into the page behind it. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-4">
         {tab === 'events' && (
           <>
             <div className="mb-3 flex items-start justify-between gap-4">
