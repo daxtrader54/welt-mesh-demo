@@ -26,7 +26,13 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   themeColor: '#f2f0ea',
   width: 'device-width',
-  initialScale: 1
+  initialScale: 1,
+  /**
+   * Lets the page paint under the notch and the home indicator, which is what makes
+   * `env(safe-area-inset-*)` return anything other than zero. Without it the console bar sits
+   * flush at bottom:0 and iOS Safari's own toolbar covers the tap target.
+   */
+  viewportFit: 'cover'
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

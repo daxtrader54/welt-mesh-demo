@@ -1,6 +1,13 @@
 import type { LinkEventType } from '@meshconnect/web-link-sdk'
 import { describe, expect, it } from 'vitest'
-import { initialOrderState, reduceOrder, type OrderState, type StepId } from './state'
+import {
+  chargedTotal,
+  initialOrderState,
+  meshTotalDisagrees,
+  reduceOrder,
+  type OrderState,
+  type StepId
+} from './state'
 
 /** Payloads below are trimmed copies of real sandbox events captured during the step-0 probe. */
 
@@ -228,5 +235,42 @@ describe('the event log', () => {
 describe('reset', () => {
   it('returns a clean slate so the next demo starts from the beginning', () => {
     expect(reduceOrder(happyPath(), { type: 'reset' })).toEqual(initialOrderState())
+  })
+})
+
+/**
+ * The confirmation headline and the receipt total used to be worked out separately, and a real
+ * run put $50.00 next to $50.01 on the same screen. Both now call chargedTotal, and these are the
+ * tests that keep them honest.
+ */
+describe('what the customer was charged', () => {
+  const withPayment = (amount: number | null, institution: number | null, reported: number | null) => {
+    const s = initialOrderState()
+    return {
+      ...s,
+      payment: { ...s.payment, amount, totalAmountInFiat: reported, symbol: 'USDC' },
+      fees: { ...s.fees, institution, institutionCurrency: 'USDC' }
+    } as OrderState
+  }
+
+  it('adds the fees to the amount rather than trusting Mesh', () => {
+    // The real sandbox case: Mesh reported 50, the withdrawal fee was 0.01.
+    expect(chargedTotal(withPayment(50, 0.01, 50), 50)).toBeCloseTo(50.01, 5)
+  })
+
+  it('says so when Mesh disagrees with the arithmetic', () => {
+    expect(meshTotalDisagrees(withPayment(50, 0.01, 50), 50)).toBe(true)
+    expect(meshTotalDisagrees(withPayment(50, 0.01, 50.01), 50)).toBe(false)
+  })
+
+  it('falls back to the order total before a payment exists', () => {
+    expect(chargedTotal(withPayment(null, null, null), 50)).toBe(50)
+    expect(meshTotalDisagrees(withPayment(null, null, 999), 50)).toBe(false)
+  })
+
+  it('never reports less than the merchant receives', () => {
+    for (const fee of [0, 0.01, 0.5, 2]) {
+      expect(chargedTotal(withPayment(50, fee, 50), 50)).toBeGreaterThanOrEqual(50)
+    }
   })
 })
