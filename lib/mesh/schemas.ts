@@ -84,6 +84,8 @@ export const holdingsValueResponse = envelope.extend({
 export const configureResponse = envelope.extend({
   content: z
     .object({
+      /** Content-level status, exactly like holdings/get. `succeeded` or a failure. */
+      status: z.string().nullish(),
       holdings: z
         .array(
           z.object({

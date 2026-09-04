@@ -329,6 +329,16 @@ export async function configureTransfer(
   if (!res.ok) return res
 
   const c = res.data.content
+  // Same content-level failure shape as holdings/get: HTTP 200 with a status that is not
+  // `succeeded`. Reading only the HTTP result missed it once already.
+  if (c?.status && c.status !== 'succeeded') {
+    return {
+      ok: false,
+      ms: res.ms,
+      error: failure('portfolio_failed', { detail: `configure status: ${c.status}` })
+    }
+  }
+
   return {
     ok: true,
     ms: res.ms,

@@ -245,7 +245,11 @@ export function TechnicalView({
   calls: ServerCall[]
   connection: ConnectionSummary | null
   /** What `configure` said about funding this order from this account. */
-  funding: { status: string | null; error: string | null; assets: number | null }
+  funding: {
+    status: string | null
+    error: string | null
+    assets: { symbol: string; eligible: boolean; eligibleWithFunding: boolean; reason: string | null }[] | null
+  }
   onReset: () => void
 }) {
   const [tab, setTab] = useState<Tab>('events')
@@ -406,32 +410,60 @@ export function TechnicalView({
              */}
             <div className="rule-b mb-3 pb-3">
               <div className="flex items-baseline justify-between gap-3">
-                <span className="label">Funding availability</span>
+                <span className="label">Funding this order</span>
                 <span
                   className="data text-xs"
                   style={{
-                    color:
-                      funding.status === 'available'
-                        ? 'var(--plate-accent)'
-                        : funding.status
-                          ? 'var(--color-warn)'
-                          : undefined
+                    color: funding.error ? 'var(--color-warn)' : undefined
                   }}
                 >
-                  {funding.status ?? (funding.error ? 'not answered' : '—')}
+                  {funding.error
+                    ? 'not answered'
+                    : funding.assets
+                      ? `${funding.assets.length} assessed`
+                      : '—'}
                 </span>
               </div>
-              <p className="note mt-1">
-                {funding.status === 'available'
-                  ? `Mesh will fund this order by converting other holdings. ${funding.assets ?? 0} assets assessed.`
-                  : funding.status === 'disabled'
-                    ? 'Conversion funding is switched off for this Mesh client, so only assets already held in an accepted currency can pay. Enabling it is a Mesh account change, not a code change.'
-                    : funding.status
-                      ? `Mesh reported "${funding.status}" for this account and order.`
-                      : funding.error
-                        ? `transfers/managed/configure did not answer: ${funding.error}`
-                        : 'Not asked yet. Connect an account and reach the checkout.'}
-              </p>
+
+              {/**
+               * Printed raw, because every attempt to summarise this was wrong.
+               *
+               * `configure` reports on the assets that can reach the merchant's addresses, not on
+               * the whole portfolio, so a shopper's BTC never appears here even when Mesh would
+               * convert it. What does appear is `eligibleForTransferWithFunding` against the
+               * destination asset, which is Mesh saying it can cover a short balance from other
+               * holdings. That single flag is the conversion story, and it is worth showing
+               * verbatim rather than translated into another guess.
+               */}
+              {funding.assets?.length ? (
+                <ul className="mt-2">
+                  {funding.assets.map(a => (
+                    <li key={a.symbol} className="flex items-baseline justify-between gap-3 py-0.5">
+                      <span className="data text-xs">{a.symbol}</span>
+                      <span className="note">
+                        {a.eligibleWithFunding
+                          ? 'eligible with funding, Mesh would convert'
+                          : a.eligible
+                            ? 'eligible as held'
+                            : (a.reason ?? 'not eligible')}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="note mt-1">
+                  {funding.error
+                    ? `transfers/managed/configure did not answer: ${funding.error}`
+                    : funding.assets
+                      ? 'Mesh returned no assets able to reach this merchant address.'
+                      : 'Not asked yet. Connect an account and reach the checkout.'}
+                </p>
+              )}
+              {funding.status && (
+                <p className="note mt-1">
+                  Funding availability: <span className="data">{funding.status}</span>
+                </p>
+              )}
             </div>
 
             <p className="note mb-3">
