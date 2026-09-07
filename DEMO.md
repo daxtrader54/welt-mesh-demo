@@ -67,49 +67,65 @@ About nine minutes without questions.
 
 **Land on https://welt-mesh-demo.vercel.app.**
 
-> This is WELT. Clearance retailer, one shoe, four colourways, fifty dollars. It is built as an
-> ordinary shop front.
+> This is WELT. 
+> A clearance retailer, 
+> one shoe, four colours, fifty dollars. 
+> It is built as an ordinary shop front.
 
 **Point at the "Crypto accepted: USDC · USDT · PYUSD" strip.**
 
-> There's a mention of the names the assets accepted. But no wallet button, no connect-web3, no mention of Mesh anywhere.
-> The customers should meet the Mesh infrastructure at checkout, experience remains as-is.
+> Shop accepts crypto. 
+> Names the assets accepted. 
+> No wallet button, no connect-web3, 
+> No mention of Mesh.
+> The customers will meet Mesh at the checkout, 
+> The shop experience remains normal.
 
-**Pick the charcoal colourway, then UK 9.**
+**Take a look around**
 
-> Stock is per colourway, so some of these sizes are genuinely gone.
+> So we four choices, we have some reviews.
+> And some specs, 
+> And some short small print for the site.
+
+**Pick the charcoal colour, then UK 9.**
+> Let's pick a shoe and see what we can do.
+
 
 ### 2. Bag and delivery (30 seconds)
 
 **Add to bag. Continue. On delivery, click Fill in a sample address.**
 
-> Normal shop, normal checkout. Bag, address, pay.
+> Add it to the bag. 
+> Let's continue to checkout. 
+> We can choose an address, or select random details. 
+> These will save for next time too.
+> Normal shop, normal checkout. 
+> Bag, address, pay.
 
 ### 3. Checkout (1 minute)
 
 **Point at the three payment options.**
 
-> Card and Apple Pay are for show, and the app says so if you click them. Everything from here is a
-> real call against Mesh's sandbox.
+> Three payment options leading with crypto.
+> Card and Apple Pay are for show, 
+> clickable but the app won't support them. 
+> Crypto only. 
+> Everything from here is a real call against Mesh's sandbox.
 
 **Point at the crypto button.**
 
-> This button is Coinbase blue with the Coinbase mark, and neither is hardcoded. Mesh publishes a
-> brand palette and a logo set for every integration it supports, light and dark, and the page reads
-> it live. Connect a Binance account and the button turns Binance yellow. The button they press
-> matches the screen it opens.
+> The "Continue with coinbase" button styling is not hardcoded. 
+> Mesh publishes a brand palette and a logo set for every integration it supports, light and dark, and the page reads it live.
+> If we change this and connect a Binance account the button turns Binance yellow. 
+> But for now we can do coinbase.
 
-**Point at the sentence under the button. It reads something like "Coinbase and Binance can fund
-this payment in USDC on Ethereum. Kraken, Robinhood, CashApp and Uphold can too, on a live
-account."**
+**Point at the sentence under the button. It reads something like "Coinbase and Binance can fund this payment in USDC on  ethereum. Kraken, Robinhood, CashApp and Uphold can too, on a live account."**
 
-> That sentence is generated, not written. Mesh publishes a list of every exchange and wallet it
-> integrates with, and which assets and networks each one can send. We ask it who can send USDC on
-> Ethereum to our address, and print the answer.
+> If we look at the sentence under the button, that sentence is generated, not written. 
+> Mesh publishes a list of every exchange and wallet it integrates with, and which assets and networks each one can send. 
+> We ask it who can send USDC on Ethereum to our address, and print the answer.
 
-> It splits in two on purpose. The first group can do it here, today, in the sandbox. The second
-> could do it on a live account. If Kraken dropped USDC on Ethereum tomorrow, this sentence would
-> change on its own and nobody would have to remember to edit it.
+> Let's click it. Mesh starts to authenticate. Username and password. 2FA. Authorize. Connected!
 
 ### 4. Connect (1 minute)
 
@@ -123,20 +139,21 @@ account."**
 
 **While the login is on screen, point at the warning strip.**
 
-> That login form is served by Mesh, not by Coinbase. Never type real exchange credentials into a
-> sandbox.
+> That login form is served by Mesh, not by Coinbase. 
+> Never type real exchange credentials into a sandbox.
 
 ### 5. The portfolio (2 minutes, and it is not about payments)
 
 **Wait for the holdings to fill in. Let them read it.**
 
-> One login, and we can see what this customer holds. Balances, fiat values, and a verdict per
-> asset.
+> One login, and we can see what this customer holds. 
+> Balances, fiat values, and a verdict per asset.
 
 **Point at the three assets at the top, then at ALSO HELD.**
 
-> The top three can settle this order. The eleven underneath say "cannot reach this merchant". We
-> collect stablecoins at an address on Ethereum, and Bitcoin cannot arrive at an Ethereum address.
+> The top three assets here can settle this order now. 
+> The eleven underneath say "cannot reach this merchant". 
+> We collect stablecoins at an address on Ethereum, and Bitcoin cannot arrive at an Ethereum address on sandbox.
 
 **If they ask about the Bitcoin, and someone always does:**
 
@@ -158,12 +175,21 @@ account."**
 
 > `MESH-NOTES.md` has the response bodies if you want them.
 
-**Back to the main thread. Point at the verdicts again.**
+**Back to the main thread. Select USDC and point at the small grey line that appears under it:
+"Funded from your balance, then from your buying power, then from a payment method on file."**
 
-> Those verdicts are Mesh's, not mine. The obvious way to build this is to compare a balance against
-> a price, and it is wrong: it misses the exchange's withdrawal minimum, the fees, and the fact that
-> Mesh can cover a shortfall from buying power or a card on file. One call per asset, and Mesh
-> answers.
+> That line is Mesh answering a specific question we asked about this specific account: if this
+> customer pays you fifty dollars in USDC, where does the money actually come from? It has given us
+> the order it would try. Balance first. If the balance falls short, buying power. If that falls
+> short, a card they have on file at the exchange.
+
+> The obvious way to build a checkout like this is to read the balance, compare it to the price, and
+> show a tick or a cross. That is wrong three ways over. It misses the exchange's own minimum
+> withdrawal, it misses the fees that come off the top, and it would tell a customer with forty
+> dollars of USDC that they cannot buy this, when Mesh can see they have a card on file and would
+> complete the payment perfectly well.
+
+> So we do not do the arithmetic. We ask Mesh once per asset we accept, and print the answer.
 
 **Point at the struck-through line under Paying from: Copy a wallet address, Withdraw from your
 exchange, Swap or move funds, Work out what we accept.**
@@ -176,16 +202,17 @@ exchange, Swap or move funds, Work out what we accept.**
 
 **Scroll to the section headed Payment trace, below the checkout.**
 
-> Seven rows, each stamped by a real Mesh event as it arrives. Nothing runs on a timer, there is no
-> spinner, and a row that stays blank is a step that genuinely did not happen. If this stops halfway,
-> that is information rather than a hang.
+> Seven rows, each stamped by a real Mesh event as it arrives. 
+> Nothing runs on a timer, there is no spinner, 
+> A row that stays blank is a step that genuinely did not happen. 
+> If this stops halfway, that is information rather than a hang.
 
 ### 7. Pay (90 seconds)
 
 **Press Pay.**
-
-> Second Link session, opening straight on the account they already connected. No second picker,
-> because being asked to choose your exchange twice in one checkout is confusing.
+> Let's press PAY
+> Second Link session, opening straight on the account the user already connected. 
+> No second picker, because being asked to choose your exchange twice in one checkout is confusing.
 
 **MFA `123456`. Approve. Watch the trace fill in.**
 
@@ -199,17 +226,18 @@ exchange, Swap or move funds, Work out what we accept.**
 
 **Point at the status on the receipt. It says Paid.**
 
-> This is the part worth your attention, because it is the difference between a demo and a payment
-> system.
+> This part shows the difference between a demo and a payment system.
 
-> It says paid, not settled. What happened is that the customer's browser told us the exchange
-> acknowledged the withdrawal. That message ran on their machine. It can be lost, it can be forged,
-> and exchanges can fail a transfer hours later.
+> It says paid, not settled. 
+> What happened is that the customer's browser told us the exchange acknowledged the withdrawal. 
+> That message ran on their machine. It can be lost, it can be forged, and exchanges can fail a transfer hours later.
 
 **Wait. Six to thirty-four seconds. It flips to Settled.**
 
-> That changed because a webhook arrived from Mesh, signature verified, server side. It is the only
-> thing in this system allowed to say you have been paid. Never let the browser mark an order paid.
+> Now it's flipped.
+> That changed because a webhook arrived from Mesh, signature verified, server side. 
+> It is the only thing in this system allowed to say you have been paid. 
+> Never let the browser mark an order paid.
 
 ### 9. Behind the payment (2 minutes, only if the room is technical)
 
@@ -247,8 +275,11 @@ Most of these are worth showing on purpose if you have the time.
 | No settlement | Give it 45 seconds before saying anything. Quicker than that reports "no webhook" for payments that settled. |
 | Everything is slow | Cold start. Reload once and carry on. |
 
-There is a reset in the panel's Demo tab. It clears the order and keeps the connection, so a second
-run does not need another sign-in.
+The panel's Demo tab has two resets and they do different things. **Start the next order** keeps the
+account connected, the bag and the delivery address, so a second run skips the sign-in. That is the
+one for between takes. **Forget everything** drops the connection, the address and the bag, so the
+next run is a genuine first visit with the sign-in back in it. That is the one to press before you
+show someone new, because the connect step is a third of the story and a warm session hides it.
 
 ---
 

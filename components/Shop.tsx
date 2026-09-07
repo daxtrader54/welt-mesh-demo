@@ -658,8 +658,19 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     }
   }, [order.status, orderId, note])
 
-  const reset = useCallback(async () => {
-    await fetch('/api/session/reset', { method: 'POST' }).catch(() => {})
+  /**
+   * `full` forgets the account and the delivery address as well as the order.
+   *
+   * The quick version is what you want between takes in one demo: the connection survives, so the
+   * next run skips the sign-in. The full version is what you want before showing someone new,
+   * because the sign-in is a third of the story and a warm session hides it.
+   */
+  const reset = useCallback(async (full = false) => {
+    await fetch('/api/session/reset', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ full })
+    }).catch(() => {})
     dispatch({ type: 'reset' })
     setStep('shop')
     setBag(null)
@@ -694,6 +705,25 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     listingScroll.current = 0
     restoreListing.current = false
     window.scrollTo({ top: 0 })
+
+    /**
+     * The full clear, and everything here is a thing the quick reset keeps on purpose.
+     *
+     * The address lives in sessionStorage so it survives a reload, which is right for a shopper
+     * mid-checkout and wrong for the start of a fresh demo, where the last person's name is still
+     * in the form. The connection summary has to go too, or the checkout keeps promising there
+     * will be no sign-in for an account the server has just forgotten.
+     */
+    if (!full) return
+    setConnection(null)
+    setHasConnection(false)
+    setAddress(EMPTY_ADDRESS)
+    try {
+      sessionStorage.removeItem('welt_address')
+      sessionStorage.removeItem('welt_bag')
+    } catch {
+      // Private modes can refuse. Nothing to recover: the state above is already cleared.
+    }
   }, [])
 
   /**
@@ -1593,7 +1623,15 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                     />
 
                     <div className="rule-t pt-5">
-                      <button type="button" onClick={reset} className="btn-primary w-full py-4 text-sm">
+                      {/* Called through a lambda, never passed bare. `reset` takes a `full` flag
+                          and an onClick handed straight to it receives the MouseEvent, which is
+                          truthy, so the shopper's "start a new order" would silently forget the
+                          account instead. Typescript caught it; the browser would not have. */}
+                      <button
+                        type="button"
+                        onClick={() => void reset()}
+                        className="btn-primary w-full py-4 text-sm"
+                      >
                         Start a new order
                       </button>
                       <p className="note mt-3">
@@ -1656,7 +1694,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         calls={calls}
         connection={connection}
         funding={fundingStatus}
-        onReset={reset}
+        onReset={full => void reset(full)}
       />
       <TechnicalView
         open={drawer}
@@ -1666,7 +1704,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
         calls={calls}
         connection={connection}
         funding={fundingStatus}
-        onReset={reset}
+        onReset={full => void reset(full)}
       />
     </div>
   )

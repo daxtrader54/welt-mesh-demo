@@ -284,7 +284,7 @@ export function TechnicalView({
     error: string | null
     assets: { symbol: string; eligible: boolean; eligibleWithFunding: boolean; reason: string | null }[] | null
   }
-  onReset: () => void
+  onReset: (full?: boolean) => void
 }) {
   const [tab, setTab] = useState<Tab>('events')
   const [expanded, setExpanded] = useState<number | null>(null)
@@ -828,32 +828,32 @@ export function TechnicalView({
             </div>
 
             {/**
-             * Reset keeps the connection on purpose, which makes a second run fast and also means
-             * it never clears the name and address. Those live in sessionStorage and survive every
-             * reset, so a demo run keeps whatever the last person typed. This is the one control
-             * that forgets them.
+             * Two buttons, because a demo needs two different resets and one of them was doing the
+             * smaller job under the bigger name. "Reset demo" kept the connection and the saved
+             * address, which is correct behaviour and the wrong label: someone pressing a button
+             * called reset and finding their account still connected reasonably concludes it is
+             * broken. Each one now says what it keeps.
              */}
             <button
               type="button"
-              onClick={() => {
-                try {
-                  sessionStorage.removeItem('welt_address')
-                } catch {
-                  // Private modes can refuse. Nothing to recover, the next write will fail too.
-                }
-                location.reload()
-              }}
-              className="btn-quiet mt-5 block"
+              onClick={() => onReset(false)}
+              className="btn-primary mt-5 px-4 py-2 text-xs"
             >
-              Forget the saved delivery address
-            </button>
-
-            <button type="button" onClick={onReset} className="btn-primary mt-4 px-4 py-2 text-xs">
-              Reset demo
+              Start the next order
             </button>
             <p className="note mt-2">
-              Clears this store&apos;s session and order. Deliberately keeps the Mesh connection, so
-              the next run does not have to sign in again.
+              Clears the order and keeps the account connected, the bag and the delivery address, so
+              the next run does not sign in again. This is the one to use between takes.
+            </p>
+
+            <button type="button" onClick={() => onReset(true)} className="btn-quiet mt-5 block">
+              Forget everything
+            </button>
+            <p className="note mt-2">
+              Drops the Mesh connection, the delivery address and the bag, so the next run is a
+              genuine first visit with the sign-in back in it. Use this before showing someone new.
+              It does not revoke anything at Mesh&apos;s end, which is permanent and not what a
+              button on a demo panel should do.
             </p>
           </>
         )}
