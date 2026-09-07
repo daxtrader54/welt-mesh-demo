@@ -2,6 +2,7 @@ import { meshEnv } from '@/lib/env'
 import { guard, ok } from '@/lib/http'
 import { PRODUCT } from '@/lib/product'
 import {
+  brandsByType,
   mapProviders,
   suggestProvider,
   type MeshIntegration,
@@ -78,6 +79,15 @@ export async function GET() {
     return ok({
       providers,
       suggested: suggestProvider(providers),
+      /**
+       * Each integration's own colours, keyed by broker type.
+       *
+       * Mesh publishes a light and dark palette per integration in the availability catalogue,
+       * and this route was already fetching it and reading nothing but `type`. The checkout uses
+       * it to colour the button that hands the shopper over, so that button and the Link screen it
+       * opens match.
+       */
+      brands: brandsByType(providers),
       eligible: providers.filter(p => p.canPay).length,
       total: providers.length,
       asset: PRODUCT.settlement.symbol,

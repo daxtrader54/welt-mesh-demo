@@ -4,6 +4,7 @@ import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
 import Image from 'next/image'
 import type { LinkEventType, LinkPayload, TransferFinishedPayload } from '@meshconnect/web-link-sdk'
 import { failure, type Failure } from '@/lib/failure'
+import type { BrokerBrand } from '@/lib/mesh/providers'
 import { usd } from '@/lib/format'
 import { chargedTotal, describeExitPage, initialOrderState, reduceOrder } from '@/lib/order/state'
 import {
@@ -124,7 +125,19 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * The provider the checkout opens Link on by default, from the live catalogue. Never hardcoded:
    * the server picks the top usable entry and this just carries it.
    */
-  const [suggested, setSuggested] = useState<{ id: string; name: string } | null>(null)
+  const [suggested, setSuggested] = useState<{
+    id: string
+    name: string
+    brand: BrokerBrand | null
+  } | null>(null)
+  /**
+   * Every integration's own colours, keyed by broker type, straight from Mesh's catalogue.
+   *
+   * Kept separately from `suggested` because the shopper may already be connected to something
+   * other than the provider we would have suggested, and the button should wear the colours of
+   * the account they are actually going to.
+   */
+  const [brands, setBrands] = useState<Record<string, BrokerBrand>>({})
   const [hasConnection, setHasConnection] = useState(false)
   /**
    * Whether the shopper has chosen the crypto route in *this* checkout.
@@ -168,6 +181,14 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * Coverage comes from Mesh's quote where it answered, and falls back to the balance only when it
    * did not, which keeps the eligibility story honest rather than quietly reverting to arithmetic.
    */
+  /**
+   * The colours for the handoff button: the account the shopper actually has, falling back to the
+   * one we would open for them. Null when Mesh published no palette for either, which is the case
+   * for plenty of the catalogue and has to look deliberate rather than half-applied.
+   */
+  const handoffBrand: BrokerBrand | null =
+    (connection ? brands[connection.brokerType] : null) ?? suggested?.brand ?? null
+
   const payingWith = asset ?? PRODUCT.settlement.symbol
   const activeFunding: Funding | null = funding && {
     ...funding,
@@ -870,7 +891,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     let cancelled = false
     fetch('/api/mesh/providers')
       .then(r => r.json())
-      .then(j => !cancelled && j.suggested && setSuggested(j.suggested))
+      .then(j => {
+        if (cancelled) return
+        if (j.suggested) setSuggested(j.suggested)
+        if (j.brands) setBrands(j.brands)
+      })
       .catch(() => {})
     return () => {
       cancelled = true
@@ -1312,12 +1337,42 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                               <span className="note">Settles in {PRODUCT.settlement.symbol}</span>
                             </div>
 
+                            {/*
+                              Wearing the exchange's own colours, from Mesh's catalogue rather than
+                              from anything hardcoded here. This is the one button on the page that
+                              is not the merchant's action: pressing it hands the shopper to
+                              Coinbase, and it now looks like the screen that opens. The house
+                              accent stays on the pay button, which is the merchant's decision and
+                              the only other action on this screen.
+
+                              Falls back silently. No palette from Mesh, no override, and the
+                              button is the acid green it has always been.
+                            */}
                             <button
                               type="button"
                               onClick={() => startConnect()}
                               disabled={busy}
-                              className="btn-primary mt-4 w-full py-4 text-sm"
+                              className="btn-primary mt-4 flex w-full items-center justify-center gap-2.5 py-4 text-sm"
+                              style={
+                                handoffBrand
+                                  ? ({
+                                      '--btn-fill': handoffBrand.button,
+                                      '--btn-hover': handoffBrand.hover,
+                                      '--btn-text': handoffBrand.text
+                                    } as React.CSSProperties)
+                                  : undefined
+                              }
                             >
+                              {handoffBrand?.icon && !busy && (
+                                <Image
+                                  src={handoffBrand.icon}
+                                  alt=""
+                                  width={18}
+                                  height={18}
+                                  className="shrink-0"
+                                  unoptimized
+                                />
+                              )}
                               {busy
                                 ? 'Opening…'
                                 : connection

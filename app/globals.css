@@ -124,10 +124,17 @@ summary::-webkit-details-marker {
   border-bottom: 1px solid var(--color-rule);
 }
 
-/* The one action colour, used once per screen. */
+/*
+ * The one action colour, used once per screen.
+ *
+ * The three custom properties are the exception, and only the connect button sets them. Mesh
+ * publishes each integration's own palette in its availability catalogue, so the button that hands
+ * a shopper over to Coinbase can be Coinbase blue and match the screen it opens. Every value falls
+ * back to the house accent, so a button that sets nothing renders exactly as it always did.
+ */
 .btn-primary {
-  background: var(--color-accent);
-  color: var(--color-ink);
+  background: var(--btn-fill, var(--color-accent));
+  color: var(--btn-text, var(--color-ink));
   font-family: var(--font-mono);
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -135,6 +142,7 @@ summary::-webkit-details-marker {
   transition: transform 120ms ease, filter 120ms ease;
 }
 .btn-primary:hover:not(:disabled) {
+  background: var(--btn-hover, var(--btn-fill, var(--color-accent)));
   filter: brightness(1.04);
 }
 .btn-primary:active:not(:disabled) {
