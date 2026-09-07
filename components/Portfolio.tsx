@@ -5,6 +5,7 @@ import Image from 'next/image'
 import { token, usd } from '@/lib/format'
 import { PRODUCT } from '@/lib/product'
 import { isSelfCustody } from '@/lib/mesh/providers'
+import { choosableAssets } from '@/lib/settlement'
 
 /**
  * What the shopper holds, and which of it can pay for this order.
@@ -135,10 +136,7 @@ export function Portfolio({
    * holds, which is choosable with the uncertainty stated rather than hidden.
    */
   const payable = positions.filter(p => quoteFor(p.symbol)?.eligible === true)
-  const unpriced = positions.filter(
-    p => quoteFor(p.symbol)?.eligible === null && p.amount > 0
-  )
-  const choosable = payable.length ? payable : unpriced
+  const choosable = choosableAssets(positions, quotes)
   const chosenSymbols = new Set(choosable.map(p => p.symbol))
   const rest = positions.filter(p => !chosenSymbols.has(p.symbol))
 
@@ -301,14 +299,13 @@ export function Portfolio({
                * between a limitation and a bug.
                */}
               For this demo, self-custody wallets cannot pay. Mesh offers {provider} on test
-              networks only in the sandbox, and this order settles in {PRODUCT.settlement.symbol} on{' '}
-              {PRODUCT.settlement.network}, so nothing held here can reach the merchant whatever the
-              balance. On a live account it would work. Choose an exchange account to carry on.
+              networks only in the sandbox, and this order settles on {PRODUCT.settlement.network}.
+              It would work on a live account.
             </>
           ) : (
             <>
-              Nothing in this account can settle {usd(PRODUCT.price)} on {PRODUCT.settlement.network}.
-              You can still continue and choose a different account.
+              Nothing in this account can settle {usd(PRODUCT.price)} on{' '}
+              {PRODUCT.settlement.network}.
             </>
           )}
         </p>
@@ -388,7 +385,16 @@ export function Portfolio({
            * anything else, which is why an account holding $398,000 of BTC and 9,000 USDC pays in
            * USDC every time. It is not a limit, it is the absence of a problem.
            */}
-          <p className="note mt-3">
+          {/**
+             * Only when something in this account can actually pay.
+             *
+             * On an account with no eligible asset at all, explaining why Mesh has no reason to
+             * convert answers a question nobody asked, and the else branch below went further and
+             * asserted "you hold enough USDC already" to a wallet holding none of it. Wrong, and
+             * wrong directly underneath a message saying this account cannot pay.
+             */}
+            {choosable.length > 0 && (
+              <p className="note mt-3">
             The merchant settles in {PRODUCT.settlement.symbol}, which does not mean these cannot
             pay for the order.{' '}
             {funding?.some(f => f.eligibleWithFunding)
@@ -406,6 +412,7 @@ export function Portfolio({
                 `You hold enough ${PRODUCT.settlement.symbol} already, so Mesh has no reason to convert anything. Whether it would convert another holding on an account without it is Mesh's call at the payment step, and this build has not seen it do so yet.`}{' '}
             All {positions.length} balances came from one connection.
           </p>
+            )}
         </details>
       )}
 

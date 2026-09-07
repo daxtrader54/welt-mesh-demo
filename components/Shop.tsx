@@ -5,6 +5,7 @@ import Image from 'next/image'
 import type { LinkEventType, LinkPayload, TransferFinishedPayload } from '@meshconnect/web-link-sdk'
 import { failure, type Failure } from '@/lib/failure'
 import type { BrokerBrand } from '@/lib/mesh/providers'
+import { cannotSettle } from '@/lib/settlement'
 import { usd } from '@/lib/format'
 import { chargedTotal, describeExitPage, initialOrderState, reduceOrder } from '@/lib/order/state'
 import {
@@ -191,6 +192,15 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * for plenty of the catalogue and has to look deliberate rather than half-applied.
    */
   const handoffBrand: BrokerBrand | null = connection ? (brands[connection.brokerType] ?? null) : null
+
+  /**
+   * Mesh has answered and left nothing in this account that can pay.
+   *
+   * Narrow on purpose: false while the quotes are loading and false if they failed, because a
+   * store outage must never be the reason someone cannot pay and Mesh checks the balance again
+   * before it takes anything. Only a real answer of "nothing here works" gets here.
+   */
+  const noRoute = cannotSettle(positions, quotes)
 
   const payingWith = asset ?? PRODUCT.settlement.symbol
   const activeFunding: Funding | null = funding && {
@@ -1562,15 +1572,29 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                           providerName={connection?.brokerName ?? null}
                           payingWith={asset}
                           showProvider={positions.length === 0}
+                          settled={!noRoute}
                           onChangeAccount={() => startPayment(true)}
                         />
+                        {/**
+                          * A Pay button that cannot succeed is worse than no button.
+                          *
+                          * Connecting a wallet used to leave "Pay $50.00" sitting under a message
+                          * saying this account cannot pay, so the only action offered was the one
+                          * guaranteed to fail. When Mesh has actually answered and left nothing to
+                          * spend, the action becomes the one that helps. While the answer is
+                          * unknown, Pay stays: Mesh checks the balance again anyway.
+                          */}
                         <button
                           type="button"
-                          onClick={() => startPayment()}
+                          onClick={() => (noRoute ? startConnect(true) : startPayment())}
                           disabled={busy}
                           className="btn-primary w-full py-4 text-sm"
                         >
-                          {busy ? 'Opening…' : `Pay ${usd(PRODUCT.price + HANDLING_FEE)}`}
+                          {busy
+                            ? 'Opening…'
+                            : noRoute
+                              ? 'Choose a different account'
+                              : `Pay ${usd(PRODUCT.price + HANDLING_FEE)}`}
                         </button>
                       </>
                     )}

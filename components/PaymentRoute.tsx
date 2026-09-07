@@ -25,6 +25,7 @@ export function FundingSource({
   providerName,
   payingWith,
   showProvider = true,
+  settled = true,
   onChangeAccount
 }: {
   /** Null when the account connected but its balances could not be read. Not a failure. */
@@ -38,6 +39,15 @@ export function FundingSource({
    * and the repetition was the single biggest thing making this column look padded.
    */
   showProvider?: boolean
+  /**
+   * True once Mesh has answered and left nothing in this account that can pay.
+   *
+   * The copy here is written for an unknown balance, where "you can still pay, Mesh will check
+   * before it takes anything" is fair and useful. Printed under a message that has just said this
+   * account cannot pay, it is a contradiction, and it appeared twice: once as the missing-balance
+   * fallback and once as the reassurance underneath. Both go quiet when the answer is known.
+   */
+  settled?: boolean
   onChangeAccount: () => void
 }) {
   const s = funding?.settlement ?? null
@@ -81,13 +91,13 @@ export function FundingSource({
             <div className="label">on {PRODUCT.settlement.network}</div>
           </div>
         </div>
-      ) : (
+      ) : settled ? (
         <p className="mt-3 text-sm text-muted">
           We could not read a {PRODUCT.settlement.symbol} balance for this account, so we cannot
           show what you hold. You can still pay, and Mesh will check the balance before it takes
           anything.
         </p>
-      )}
+      ) : null}
 
       <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
         {/**
@@ -105,7 +115,7 @@ export function FundingSource({
          * A covered balance needs no sentence. The two states that do say something are the one we
          * could not measure and the one that genuinely falls short.
          */}
-        {(!s || !s.covers) && (
+        {settled && (!s || !s.covers) && (
           <p className="text-sm text-muted">
             {!s
               ? `Mesh checks the balance before it takes anything.`
@@ -117,7 +127,7 @@ export function FundingSource({
         </button>
       </div>
 
-      <SkippedSteps />
+      {settled && <SkippedSteps />}
     </section>
   )
 }
