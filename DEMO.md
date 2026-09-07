@@ -1,10 +1,19 @@
 # Demoing WELT
 
+**Version 2**, 7 September 2026.
+
 A script for showing this to someone, and the honest answers to what they will ask.
 
 Ten minutes for the walkthrough, five for questions. It works on a laptop at 1440x900, which is what
 it was designed for. Demo from **https://welt-mesh-demo.vercel.app**, never from a preview URL: Mesh
 validates the origin Link opens from, and every commit gets a new preview domain.
+
+What changed from v1: the customer now picks their own exchange on the first connect, so the
+branding beat moved to after the connect where it is a response rather than a claim. There is a new
+answer covering what actually happens when Pay is pressed, which is the question everything else
+turns out to depend on. And the MetaMask answer has been corrected: v1 asserted that a self-custody
+transfer in the sandbox would be a genuine on-chain testnet transaction, and there is no evidence
+for that.
 
 ---
 
@@ -67,15 +76,15 @@ About nine minutes without questions.
 
 **Land on https://welt-mesh-demo.vercel.app.**
 
-> This is WELT. 
+> This is WELT.
 > A pretend clearance retailer
-> one shoe, four colours, fifty dollars. 
+> one shoe, four colours, fifty dollars.
 > It is built as an ordinary shop front.
 
 **Point at the "Crypto accepted: USDC · USDT · PYUSD" strip.**
 
 > At this stage, there is no mention of Mesh.
-> But the shop accepts crypto. 
+> But the shop accepts crypto.
 > With no sign in with wallet button, no connect-web3 ux
 > The shop experience remains normal.
 > The customers will meet Mesh at the checkout
@@ -83,22 +92,22 @@ About nine minutes without questions.
 **Take a look around**
 
 > So we four choices, we have some reviews.
-> And some specs, 
+> And some specs,
 > And some short small print for the site.
 
 **Pick the charcoal colour, then UK 9.**
-> Let's pick a shoe and see what we can do.
 
+> Let's pick a shoe and see what we can do.
 
 ### 2. Bag and delivery (30 seconds)
 
 **Add to bag. Continue. On delivery, click Fill in a sample address.**
 
-> Add it to the bag. 
-> Let's continue to checkout. 
-> We can choose an address, or select random details. 
+> Add it to the bag.
+> Let's continue to checkout.
+> We can choose an address, or select random details.
 > These will save for next time too.
-> Normal shop, normal checkout. 
+> Normal shop, normal checkout.
 > Bag, address, pay.
 
 ### 3. Checkout (1 minute)
@@ -106,35 +115,35 @@ About nine minutes without questions.
 **Point at the three payment options.**
 
 > Three payment options leading with crypto.
-> Card and Apple Pay are for show, 
-> clickable but the app won't support them. 
-> Crypto only. 
+> Card and Apple Pay are for show,
+> clickable but the app won't support them.
+> Crypto only.
 > Everything from here is a real call against Mesh's sandbox.
 
 **Point at the crypto button. It reads "Choose your exchange or wallet".**
 
-> We do not name an exchange, because nothing has been chosen yet. 
-> Where your money is held is the one decision that is genuinely the customer's, 
+> We do not name an exchange, because nothing has been chosen yet.
+> Where your money is held is the one decision that is genuinely the customer's,
 > and a merchant's page should not be answering it for a first-time user.
 
 **Point at the sentence under it: "Coinbase and Binance can fund this payment in USDC on Ethereum.
 Kraken, Robinhood, CashApp and Uphold can too, on a live account."**
 
-> That sentence is generated, not written. 
-> Mesh publishes a list of every exchange and wallet it integrates with, 
-> and which assets and networks each one can send. 
+> That sentence is generated, not written.
+> Mesh publishes a list of every exchange and wallet it integrates with,
+> and which assets and networks each one can send.
 > The app asks who can send USDC on Ethereum to our address, and then prints the answer.
 
 ### 4. Connect (1 minute)
 
 **Press the button. Mesh Link opens on the full picker.**
 
-> This is Mesh Link and I have built none of it. 
-> To integrate it was one script tag, 
+> This is Mesh Link and I have built none of it.
+> To integrate it was one script tag,
 > plus a token my server mints for the session.
 
-> The list your customer is looking at now is the same one that generated that sentence. 
-> Everything on it is already integrated. 
+> The list your customer is looking at now is the same one that generated that sentence.
+> Everything on it is already integrated.
 > Adding Kraken is not a project with a timeline, it is a customer tapping Kraken.
 
 **Pick Coinbase.**
@@ -143,28 +152,29 @@ Kraken, Robinhood, CashApp and Uphold can too, on a live account."**
 
 **While the login is on screen, point at the warning strip.**
 
-> That login form is served by Mesh, not by Coinbase. 
+> That login form is served by Mesh, not by Coinbase.
 > Never type real exchange credentials into a sandbox.
 
 **Once it closes, point at the button again. It now reads "Continue with Coinbase", in Coinbase
 blue, with the Coinbase mark.**
 
-> None of that is hardcoded. Mesh publishes a brand palette and a logo set for every integration it
-> supports, light and dark, and the page reads it live. Had they picked Binance, that button would
-> be Binance yellow. So the checkout now matches the account behind it, and if they come back to
-> pay, the button they press looks like the screen it opens.
+> None of that is hardcoded.
+> Mesh publishes a brand palette and a logo set for every integration it supports, light and dark,
+> and the page reads it live.
+> Had they picked Binance, that button would be Binance yellow.
+> So the checkout now matches the account behind it.
 
 ### 5. The portfolio (2 minutes, and it is not about payments)
 
 **Wait for the holdings to fill in. Let them read it.**
 
-> One login, and we can see what this customer holds. 
+> One login, and we can see what this customer holds.
 > Balances, fiat values, and a verdict per asset.
 
 **Point at the three assets at the top, then at ALSO HELD.**
 
-> The top three assets here can settle this order now. 
-> The eleven underneath say "cannot reach this merchant". 
+> The top three assets here can settle this order now.
+> The eleven underneath say "cannot reach this merchant".
 > We collect stablecoins at an address on Ethereum, and Bitcoin cannot arrive at an Ethereum address on sandbox.
 
 **If they ask about the Bitcoin, and someone always does:**
@@ -214,16 +224,17 @@ exchange, Swap or move funds, Work out what we accept.**
 
 **Scroll to the section headed Payment trace, below the checkout.**
 
-> Seven rows, each stamped by a real Mesh event as it arrives. 
-> Nothing runs on a timer, there is no spinner, 
-> A row that stays blank is a step that genuinely did not happen. 
+> Seven rows, each stamped by a real Mesh event as it arrives.
+> Nothing runs on a timer, there is no spinner,
+> A row that stays blank is a step that genuinely did not happen.
 > If this stops halfway, that is information rather than a hang.
 
 ### 7. Pay (90 seconds)
 
 **Press Pay.**
+
 > Let's press PAY
-> Second Link session, opening straight on the account the user already connected. 
+> Second Link session, opening straight on the account the user already connected.
 > No second picker, because being asked to choose your exchange twice in one checkout is confusing.
 
 **MFA `123456`. Approve. Watch the trace fill in.**
@@ -240,15 +251,15 @@ exchange, Swap or move funds, Work out what we accept.**
 
 > This part shows the difference between a demo and a payment system.
 
-> It says paid, not settled. 
-> What happened is that the customer's browser told us the exchange acknowledged the withdrawal. 
+> It says paid, not settled.
+> What happened is that the customer's browser told us the exchange acknowledged the withdrawal.
 > That message ran on their machine. It can be lost, it can be forged, and exchanges can fail a transfer hours later.
 
 **Wait. Six to thirty-four seconds. It flips to Settled.**
 
 > Now it's flipped.
-> That changed because a webhook arrived from Mesh, signature verified, server side. 
-> It is the only thing in this system allowed to say you have been paid. 
+> That changed because a webhook arrived from Mesh, signature verified, server side.
+> It is the only thing in this system allowed to say you have been paid.
 > Never let the browser mark an order paid.
 
 ### 9. Behind the payment (2 minutes, only if the room is technical)
@@ -297,7 +308,33 @@ show someone new, because the connect step is a third of the story and a warm se
 
 ## The questions you will get
 
-**"Can my customer choose to pay in Bitcoin?"**
+### "What actually happens when I press Pay?"
+
+Ask this of yourself before anyone asks you, because every other answer here depends on it.
+
+**Everything is real except the money movement.**
+
+Our server mints a link token carrying the amount, asset, network and destination. Mesh Link opens on
+the connected account, quotes the exchange's fees, previews the transfer and takes the MFA code. Mesh
+writes a transfer into its own ledger, marks it succeeded and generates a transaction hash. It then
+posts a signed webhook to our server, which verifies the HMAC and flips the order to settled.
+
+All of that is genuine. Real API calls, real Mesh records, a real webhook with a real signature, a
+real state change on our side. The events driving the payment trace on screen actually fired.
+
+What does not happen is the last inch. No blockchain is touched. The simulated Coinbase decrements a
+simulated balance, which is why the sandbox pot drains at about $50 a run and is shared with every
+other Mesh sandbox user in the world.
+
+So the hash is not on any chain. We checked it against Ethereum mainnet, Sepolia and Base and found
+it on none of them, which is why the receipt shows it as a reference and does not link to an
+explorer. Adding an explorer link would have been the easy dishonest choice.
+
+The useful way to put this to a merchant: you are seeing the whole integration exercised except the
+settlement onto a chain, and that last step is the part a merchant would never see anyway. What they
+would see is the webhook, and the webhook is real.
+
+### "Can my customer choose to pay in Bitcoin?"
 
 No, and there are two reasons. Only one of them is a switch.
 
@@ -312,13 +349,13 @@ eligible. Every response carries `transferBalanceFundingAvailability: disabled`.
 Say that plainly rather than talking around it. "We tested it, here is the response body, here is the
 question we have put to Mesh" is a better answer than a hedge. `MESH-NOTES.md` has the full run.
 
-**"Why can't I pay with MetaMask?"**
+### "Why can't I pay with MetaMask?"
 
-In the sandbox, because the chains do not meet. In production it works fine, and that distinction is
-the whole answer.
+Because we are pointed at a sandbox, and a sandbox must not be able to touch anything real. The
+testnet business below is the mechanism, not the reason.
 
-Our address is on Ethereum, chainId 1. Here is what each integration can actually reach, live from
-Mesh:
+**The mechanism.** Our address is on Ethereum, chainId 1. Here is what each integration can reach,
+live from Mesh:
 
 ```
 MetaMask   Sepolia (11155111), Base Sepolia (84532)
@@ -328,45 +365,48 @@ Coinbase   Ethereum (1), Polygon, Solana, Base, Bitcoin, + 12 more
 Binance    Ethereum (1), BSC, Solana, + 19 more
 ```
 
-The wallets have no route to chainId 1. Not a policy, the sets do not intersect. Those testnets do
-carry USDC, but Sepolia USDC is a different contract on a different chain and cannot arrive at a
-mainnet address.
+The wallets have no route to chainId 1, so no transfer is possible. Not a policy, the sets do not
+intersect. Those testnets do carry USDC, but Sepolia USDC is a different contract on a different
+chain and cannot arrive at a mainnet address.
 
-The reason behind it is worth giving, because it is the part a merchant will not have thought about.
-Coinbase and Binance "sandbox" are simulated exchanges: Mesh runs a fake exchange with fake balances
-and a fake login, and because the whole thing is fiction it can pretend to sit on mainnet and hand
-you a mainnet transfer that never happened. That is why our transaction hashes exist on no public
-chain.
+**Why the difference exists**, and this is the part worth having ready. Mesh can simulate an
+exchange, because an exchange is just a server it talks to. It runs a fake Coinbase with a fake
+login, a shared fake balance and fake transfers, and because the whole thing is fiction it can
+happily claim to sit on mainnet.
 
-MetaMask cannot be faked. It is a real wallet holding real keys, and Mesh cannot invent a balance or
-produce a mainnet transaction from it without a signature that would move real money. So the only
-honest sandbox for a self-custody wallet is a real testnet: real chain, real signature, worthless
-money.
+It cannot simulate your wallet. MetaMask is really installed in your browser, really holds your keys,
+and its balance can only be learned by reading a real chain. A mainnet transfer from it would need
+your signature and would move your actual money, which is the one thing a sandbox must never do. So
+self-custody wallets are confined to test networks, where nothing valuable can move.
 
-Custodial sandbox is a fake exchange pretending to be on mainnet. Self-custody sandbox is a real
-wallet on a real chain with play money. Nothing bridges those two, which is why a demo can show one
-or the other and never both in the same payment. On a live account MetaMask holding mainnet USDC
-pays a mainnet USDC address perfectly well, and Mesh already lists it as supporting outgoing
-transfers.
+**Someone will say "but my MetaMask has real mainnet USDC in it".** They are right that the payment
+itself is unremarkable, and in production it works: swap our sandbox keys for production keys and
+MetaMask appears on mainnet alongside everything else. They should still not try it here. The
+destination `0x0Ff0000f0A0f0000F0F000000000ffFf00f0F0f0` is a placeholder from the exercise brief and
+nobody holds its keys. Sandbox money going there is fine because it never moves. Real money going
+there is gone permanently.
 
-**"What does it cost the merchant?"**
+**One thing we have not verified**, and do not claim in a room. Whether a wallet transfer in Mesh's
+sandbox produces a genuine transaction on Sepolia, or is simulated the same way the exchange side is,
+we do not know. The evidence points at simulated: the hashes this sandbox returns were checked
+against Sepolia among others and were not there. To settle it, point `MERCHANT_NETWORK_ID` at
+Sepolia, connect a MetaMask holding Sepolia USDC, pay, and look the hash up on sepolia.etherscan.io.
+Twenty minutes and a wallet with testnet funds.
+
+### "What does it cost the merchant?"
 
 `clientFee` is wired up and tested and ships at zero. Set it to 2 and Mesh charges $52 at source and
 delivers $50 to the destination. It is off because a shop advertising $50 and charging $52 is either
 lying in the headline or dripping the fee at the last step, and the second one is now unlawful in the
 UK.
 
-**"Is the transaction hash real?"**
+### "How much of this is mocked?"
 
-No, and we checked properly: mainnet, Sepolia and Base. Sandbox hashes exist on no public chain,
-which is why there is no explorer link. Putting one there would have been the easy dishonest choice.
+Card and Apple Pay, and they say so. The blockchain settlement, as above. Everything else is a real
+Mesh call against the sandbox. No failure is simulated, no success state is faked, and every row in
+the payment trace is stamped by an event that actually arrived.
 
-**"How much of this is mocked?"**
-
-Card and Apple Pay, and they say so. Everything else is a real Mesh call against the sandbox. No
-failure is simulated. Every row in the trace is stamped by an event that actually arrived.
-
-**"How long would this take us to build?"**
+### "How long would this take us to build?"
 
 The Mesh integration is small: a link token endpoint, the SDK, a portfolio call, a webhook. The work
 is everywhere else. Two Link sessions rather than one, because holdings need a connection first.
