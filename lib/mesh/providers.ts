@@ -196,3 +196,21 @@ export function brandsByType(providers: Provider[]): Record<string, BrokerBrand>
   for (const type of ambiguous) delete out[type]
   return out
 }
+
+/**
+ * Whether a connection is a wallet the customer holds themselves.
+ *
+ * Worth knowing because it changes what a failure means. An exchange account with nothing eligible
+ * is an empty or wrongly-funded account, and trying a different one is fair advice. A self-custody
+ * wallet in this sandbox can never settle here however it is funded: Mesh offers MetaMask, Phantom
+ * and Rainbow on Sepolia and Base Sepolia only, and this merchant collects on Ethereum mainnet. The
+ * two produce the same empty result and deserve different words.
+ *
+ * Matched on the broker types Mesh uses for wallets rather than on names, since all three wallets
+ * report the same `deFiWallet` type and the list of names will grow.
+ */
+const SELF_CUSTODY = new Set(['defiwallet', 'cryptocurrencyaddress', 'cryptocurrencywallet'])
+
+export function isSelfCustody(brokerType: string | null | undefined): boolean {
+  return SELF_CUSTODY.has((brokerType ?? '').toLowerCase())
+}

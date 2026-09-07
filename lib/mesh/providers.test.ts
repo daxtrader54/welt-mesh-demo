@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { brandsByType, mapProviders, suggestProvider } from './providers'
+import { brandsByType, isSelfCustody, mapProviders, suggestProvider } from './providers'
 
 /**
  * Fixtures trimmed from real sandbox responses. The shapes differ between the two endpoints on
@@ -269,5 +269,33 @@ describe('broker brands', () => {
   it('drops a type whose brands disagree rather than picking one', () => {
     const brands = brandsByType(mapProviders(CAPABLE, OFFERED, SETTLEMENT))
     expect(Object.keys(brands)).not.toContain('deFiWallet')
+  })
+})
+
+/**
+ * An exchange account with nothing eligible is an empty account, and "try another one" is fair
+ * advice. A self-custody wallet in this sandbox can never settle here however it is funded, so the
+ * same empty result needs different words.
+ */
+describe('isSelfCustody', () => {
+  it('recognises the type all three sandbox wallets report', () => {
+    expect(isSelfCustody('deFiWallet')).toBe(true)
+    expect(isSelfCustody('cryptocurrencyAddress')).toBe(true)
+    expect(isSelfCustody('cryptocurrencyWallet')).toBe(true)
+  })
+
+  it('does not catch exchanges', () => {
+    expect(isSelfCustody('sandboxCoinbase')).toBe(false)
+    expect(isSelfCustody('coinbase')).toBe(false)
+    expect(isSelfCustody('sandbox')).toBe(false)
+    expect(isSelfCustody('krakenOAuth')).toBe(false)
+  })
+
+  /** Broker type casing has bitten this codebase before, so it is matched case-insensitively. */
+  it('is case insensitive, and safe on nothing', () => {
+    expect(isSelfCustody('DEFIWALLET')).toBe(true)
+    expect(isSelfCustody(null)).toBe(false)
+    expect(isSelfCustody(undefined)).toBe(false)
+    expect(isSelfCustody('')).toBe(false)
   })
 })

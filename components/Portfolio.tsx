@@ -4,6 +4,7 @@ import Image from 'next/image'
 
 import { token, usd } from '@/lib/format'
 import { PRODUCT } from '@/lib/product'
+import { isSelfCustody } from '@/lib/mesh/providers'
 
 /**
  * What the shopper holds, and which of it can pay for this order.
@@ -93,7 +94,8 @@ export function Portfolio({
   funding,
   selected,
   onSelect,
-  brand
+  brand,
+  brokerType
 }: {
   provider: string
   accountName: string | null
@@ -117,6 +119,8 @@ export function Portfolio({
    * Mesh published no palette, and everything falls back to the house ink.
    */
   brand?: { button: string; text: string; icon: string | null } | null
+  /** Mesh's own type for the connection. Decides what an empty result actually means. */
+  brokerType?: string | null
 }) {
   const quoteFor = (symbol?: string | null) => quotes?.find(q => q.symbol === symbol) ?? null
 
@@ -168,7 +172,11 @@ export function Portfolio({
           <span>
             <span className="label">Held at</span>{' '}
             <span className="font-semibold">{provider}</span>
-            {accountName && <span className="text-muted"> · {accountName}</span>}
+            {/* Wallets report the wallet's name as the account name too, so this printed
+                "MetaMask · MetaMask". Only shown when it adds something. */}
+            {accountName && accountName !== provider && (
+              <span className="text-muted"> · {accountName}</span>
+            )}
           </span>
         </p>
         {/**
@@ -280,8 +288,29 @@ export function Portfolio({
       {/* Only when Mesh actually answered. An unanswered quote is not a refusal. */}
       {quotes !== null && choosable.length === 0 && (
         <p className="mt-4 text-sm text-muted">
-          Nothing in this account can settle {usd(PRODUCT.price)} on {PRODUCT.settlement.network}.
-          You can still continue and choose a different account.
+          {isSelfCustody(brokerType) ? (
+            <>
+              {/**
+               * A wallet is not an empty account and should not be told it is one.
+               *
+               * "Nothing in this account can settle $50" reads as "you are short", which sends
+               * someone off to fund a wallet that still would not work. Mesh offers MetaMask,
+               * Phantom and Rainbow on test networks only in this sandbox, and this order settles
+               * on Ethereum mainnet, so no balance in it could ever reach us. That is a property of
+               * the demo environment rather than of their wallet, and saying so is the difference
+               * between a limitation and a bug.
+               */}
+              For this demo, self-custody wallets cannot pay. Mesh offers {provider} on test
+              networks only in the sandbox, and this order settles in {PRODUCT.settlement.symbol} on{' '}
+              {PRODUCT.settlement.network}, so nothing held here can reach the merchant whatever the
+              balance. On a live account it would work. Choose an exchange account to carry on.
+            </>
+          ) : (
+            <>
+              Nothing in this account can settle {usd(PRODUCT.price)} on {PRODUCT.settlement.network}.
+              You can still continue and choose a different account.
+            </>
+          )}
         </p>
       )}
 

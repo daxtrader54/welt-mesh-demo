@@ -1553,6 +1553,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                             selected={asset}
                             onSelect={setAsset}
                             brand={handoffBrand}
+                            brokerType={connection?.brokerType ?? null}
                           />
                         )}
 
