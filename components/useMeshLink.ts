@@ -101,6 +101,25 @@ export async function preloadMeshLink(): Promise<void> {
 /** How long Link gets to emit its first event before we assume it will never render. */
 const LOAD_TIMEOUT_MS = 12_000
 
+/**
+ * Undo anything the SDK's overlay left on the document.
+ *
+ * In overlay mode `addPopup` injects a stylesheet of its own that sets
+ * `body { position: fixed; overflow: hidden }` on the host page, and the only thing that takes it
+ * away is `removePopup`, which runs inside `closeLink`. So any path that ends a session without
+ * reaching `closeLink` leaves the whole page frozen, with no overlay on screen to explain why and
+ * nothing in the console. Overlay is what phones get, and what a narrow desktop window gets, so
+ * this is not a hypothetical.
+ *
+ * Both ids belong to the SDK and are removed by id, so on the normal path this finds nothing and
+ * does nothing. It is a net under a third party's cleanup, not a replacement for it.
+ */
+function clearLinkOverlayResidue() {
+  if (typeof document === 'undefined') return
+  document.getElementById('mesh-link-popup__styles')?.remove()
+  document.getElementById('mesh-link-popup')?.remove()
+}
+
 export function useMeshLink(handlers: MeshLinkHandlers) {
   const [busy, setBusy] = useState(false)
   // A ref as well as state: state updates are async and a fast double click can slip between.
@@ -237,6 +256,7 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
             } catch {
               // Already gone. Nothing to do.
             }
+            clearLinkOverlayResidue()
           }
         })
 
@@ -278,6 +298,7 @@ export function useMeshLink(handlers: MeshLinkHandlers) {
     } catch {
       // Already gone.
     }
+    clearLinkOverlayResidue()
   }, [])
 
   return { open, busy, close }

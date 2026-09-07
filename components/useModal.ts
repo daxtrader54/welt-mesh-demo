@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
+import { createScrollLock } from '@/lib/scroll-lock'
 
 /**
  * Focus for anything that sits on top of the page.
@@ -22,6 +23,18 @@ import { useEffect, useRef } from 'react'
  * `enabled` rather than a mounted/unmounted hook, so a surface that is always in the DOM (the
  * docked panel) can opt out without a second code path.
  */
+/**
+ * One lock for the whole document, shared by every overlay in the app, because holding the page
+ * still is a property of the page and not of any one dialog. The counting and the reason for it
+ * are in `lib/scroll-lock.ts`, where they are tested without a DOM.
+ */
+const pageScroll = createScrollLock(
+  () => document.body.style.overflow,
+  value => {
+    document.body.style.overflow = value
+  }
+)
+
 export function useModal<T extends HTMLElement>(enabled: boolean, onClose: () => void) {
   const ref = useRef<T>(null)
   /** Whatever had focus before this opened. Where focus goes back to when it closes. */
@@ -42,8 +55,7 @@ export function useModal<T extends HTMLElement>(enabled: boolean, onClose: () =>
      * chaining once it has something to scroll; this stops the page moving when the touch lands
      * somewhere that does not, like the header or the tab row.
      */
-    const scrollLock = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
+    pageScroll.lock()
 
     const focusable = () =>
       Array.from(
@@ -92,7 +104,7 @@ export function useModal<T extends HTMLElement>(enabled: boolean, onClose: () =>
     document.addEventListener('keydown', onKey, true)
     return () => {
       document.removeEventListener('keydown', onKey, true)
-      document.body.style.overflow = scrollLock
+      pageScroll.unlock()
       // Only take focus back if it is still inside the thing that just closed. If something else
       // has deliberately moved it, leave it alone.
       const active = document.activeElement
