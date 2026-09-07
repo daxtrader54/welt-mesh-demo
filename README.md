@@ -30,7 +30,9 @@ listing structure came from. No orders are fulfilled.
 4. **Delivery.** Name, email and address, because a checkout that jumps from bag to payment is not
    one anyone recognises. It never leaves the browser.
 5. **Checkout.** Card and Apple Pay open real-looking sheets that then say they are for show. The
-   crypto option opens a Mesh Link session that connects an account and stops.
+   crypto option opens Mesh's picker so the customer chooses where their money is held, and the
+   session connects that account and stops. From then on the button wears that exchange's own
+   colours and mark, taken live from Mesh's catalogue.
 6. **Portfolio.** Everything in the connected account, with Mesh's own answer on which of it can pay
    for this order and where the money would come from. Pick one.
 7. **Pay.** A second Link session carries the payment, deep-linked to the account already connected
@@ -87,7 +89,7 @@ down.
 ### Scripts
 
 ```bash
-npm test                                    # 115 tests, no secrets, under a second
+npm test                                    # 131 tests, no secrets, under a second
 npm run typecheck
 node scripts/webhook-check.mjs <url>        # prove the webhook endpoint without waiting for Mesh
 node scripts/crop-product-images.mjs        # re-frame the photographs from public/product-src
@@ -367,13 +369,19 @@ was never called, and worth reading the timestamps before blaming the sender.
 
 ---
 
-## What we learned about Mesh
+## The other two documents
 
 `MESH-NOTES.md` is the integration log: every restriction, undocumented shape and wrong turn found
 building this, marked by whether it was measured, documented, or still unknown. The three endpoints
 that want three different broker type names for the same connection, the two unrelated shapes a
-refused token arrives in, the fee that is smaller than a cent, and the six questions the docs do not
-answer. It is the part most likely to be useful to somebody else.
+refused token arrives in, the fee that is smaller than a cent, the run that settled whether Mesh
+will convert a holding to fund a payment, and the questions the docs do not answer. It is the part
+most likely to be useful to somebody else.
+
+`DEMO.md` is the walkthrough: a ten minute script with what to say at each step, the pre-flight that
+matters, what to do when something breaks in front of an audience, and straight answers to the
+questions this gets asked. Including the two that are awkward, which are whether a customer can pay
+in Bitcoin and whether any of this touches a blockchain.
 
 ---
 
@@ -386,21 +394,44 @@ someone holds before asking them to pay means connecting first and paying second
 Link session and an extra click. *Bought:* the portfolio, which is what shows Mesh does more than
 move money, and the ability to price the payment before anyone commits.
 
-**A named default, with the catalogue one click away.** The connect session used to open Mesh's
-full catalogue, and a tester who does not own crypto could not tell which of MetaMask, Phantom and
-Rainbow was for them. So the checkout names a provider and deep-links to it: *Pay with Coinbase*,
-with *Use a different exchange or wallet* underneath, which opens the whole catalogue. The name is
-never hardcoded. `/api/mesh/providers` ranks the live catalogue by what can actually settle here
-and returns the top entry, so the button follows the catalogue rather than a string in the source.
-*Tradeoff:* the breadth argument is now one click in rather than the default, which is the right
-trade when the default costs a shopper the checkout.
+**The customer picks their exchange, once, and then never again.** This went both ways before it
+settled. The connect session originally opened Mesh's full catalogue, and a tester who owns no
+crypto could not tell which of MetaMask, Phantom and Rainbow was for them, so the checkout was
+changed to name a provider and deep-link to it: *Continue with Coinbase*, with the catalogue
+demoted to a link underneath.
+
+That fixed the tester and broke something worse. Where your money is held is the one decision in
+this checkout that is genuinely the customer's, and a merchant's page asserting that everyone banks
+at Coinbase is both presumptuous and wrong. It also buried the argument the integration exists to
+make, which is that this is every exchange and wallet Mesh supports rather than one.
+
+So the first connect opens the picker and every connect after it is deep-linked, because once there
+is an account there is nothing left to pick. The tester's confusion is answered by the sentence
+under the button instead, which names who can actually fund this payment and is generated from the
+live catalogue. *Tradeoff:* a first-time shopper sees a list rather than a single button, and pays
+one moment of choice for a checkout that does not put words in their mouth.
+
+**The button wears the exchange's own colours.** Mesh publishes a brand palette and a logo set for
+every integration in its availability catalogue, light and dark, and this app was already fetching
+that catalogue and reading nothing from it but `type`. Once an account is connected the handoff
+button becomes Coinbase blue with the Coinbase mark, the account line carries the same mark, and
+the selected asset row takes the same accent. Connect Binance and all three turn yellow.
+
+Only after connecting, and only those three places. Before a choice is made the button cannot wear
+a brand it is not opening, and the pay button stays the house accent throughout because that is the
+merchant's action and the design has one action colour. The values are validated rather than
+trusted, since they reach a `style` attribute: a colour is hex or it is dropped, an icon is on
+Mesh's CDN or it is dropped. Brands are matched on type *and* name, because MetaMask, Phantom and
+Rainbow are all typed `deFiWallet` with three different palettes.
 
 **The merchant ranks providers, not the alphabet.** Ranking alphabetically put Binance first,
-because the sandbox's Binance entry is typed `sandbox` and named "Binance". That accident then
-decided which provider the checkout deep-linked to. `PREFERRED_PROVIDERS` in `lib/product.ts` is
-the merchant's own order, applied after "can actually settle here", so an unusable favourite never
+because the sandbox's Binance entry is typed `sandbox` and named "Binance". That accident used to
+decide which provider the checkout deep-linked to. `PREFERRED_PROVIDERS` in `lib/product.ts` is the
+merchant's own order, applied after "can actually settle here", so an unusable favourite never
 outranks a working provider. Matched on brand name, because a merchant ranks Coinbase, not
-`sandboxCoinbase`, `coinbase` and `coinbaseRamp` separately.
+`sandboxCoinbase`, `coinbase` and `coinbaseRamp` separately. Now that the first connect opens the
+picker, nothing resolves a single default any more, and the ranking survives as the order the list
+is shown in.
 
 **Deep-link on pay too.** The payment session goes straight to whatever they connected, because
 being asked the same question twice in one checkout reads as a bug. **Change account** drops the
@@ -490,9 +521,18 @@ this repo does not own.
 and the receipt, and it is the most tested thing here because it is where a regression would cost
 something.
 
-**No explorer link.** The returned hash does not exist on Ethereum mainnet, Sepolia or Base. Checked
-with `eth_getTransactionByHash` against all three. It is a Mesh sandbox reference, shown as one. A
-link to a 404 would be worse than none.
+**What a payment actually is, in this sandbox.** Everything is real except the last inch. The link
+token, the Link session, the fee quote, the MFA, the transfer written into Mesh's own ledger and the
+signed webhook our server verifies before it will say settled: all genuine, all reproducible, and
+every row of the payment trace is stamped by an event that really fired. What does not happen is a
+blockchain being touched. The simulated exchange decrements a simulated balance, which is why the
+sandbox pot drains about $50 a run and is shared with every other Mesh sandbox user. Worth stating
+plainly rather than leaving to be discovered, because the whole build claims nothing here is faked
+and this is the one place where something is.
+
+**No explorer link.** Following from the above, the returned hash does not exist on Ethereum
+mainnet, Sepolia or Base. Checked with `eth_getTransactionByHash` against all three. It is a Mesh
+sandbox reference, shown as one. A link to a 404 would be worse than none.
 
 **The SDK's `BrokerType` union is behind the API.** It lists `sandbox` but not `sandboxCoinbase`,
 which is exactly what a sandbox Coinbase connection returns. Broker type is carried as a string and
@@ -566,6 +606,15 @@ Every failure has designed copy: a plain sentence for the shopper, one action, a
 plus the Mesh reference kept for the technical panel. Retry is only offered where retrying is honest,
 which means minting a fresh token rather than reusing a spent one.
 
+**Each one also says who caused it**, because the first thing anyone reviewing a demo alone wonders
+about a tidy failure screen is whether it was staged. Every code carries a source: Mesh reporting or
+refusing, the shopper's own action, this app, or the network. That distinction is real and rendering
+all of them identically made them all look invented. "Nothing in that account can cover this" is
+Mesh. "Payment cancelled" is the shopper closing Link. "This store is not configured yet" is us.
+The code is printed too, so `no_eligible_assets` on screen matches the events tab and the copied
+session log, and anything Mesh reported carries a link straight into that log. That is the strongest
+answer available to *is this mocked*: here is the unedited event that produced the screen.
+
 Covered: missing configuration, link token failure, the SDK failing to load *or silently never
 loading*, the shopper closing Link (naming the page they left from), connection failure, declined, a
 wallet not present, a wallet that timed out, no eligible assets (listing what the account holds), a
@@ -606,20 +655,26 @@ Three that are non-obvious:
 
 ## Testing
 
-115 tests over the logic where a regression costs something: webhook HMAC verification including the
+131 tests over the logic where a regression costs something: webhook HMAC verification including the
 re-serialisation trap, `EventId` idempotency, the settlement precedence that stops a late `Pending`
 un-settling a paid order, the check that a delivery describes the order it claims to, both link
 token builders, the merchant fee ratio and the guarantee it never changes the destination amount,
-the provider catalogue mapping and the merchant ranking on top of it, what the customer was actually
-charged, the event to order reducer, whether a Mesh error means the stored token is dead, per
-colourway stock, and money formatting. Runs in under a second, needs no secrets.
+the provider catalogue mapping and the merchant ranking on top of it, the broker brand join and the
+validation that keeps unchecked strings out of a `style` attribute, the counted page-scroll lock,
+what the customer was actually charged, the event to order reducer, whether a Mesh error means the
+stored token is dead, per colourway stock, and money formatting. Runs in under a second, needs no
+secrets.
 
 The reducer fixtures are trimmed copies of real sandbox payloads, including two failures that actually
 happened: a wallet not present on the device, and an account with nothing eligible.
 
 The provider mapping has its own file because a wrong field name shipped there, reading
 `content.integrations` from an endpoint that returns `content.items`, and a typecheck cannot see
-that. `lib/product.test.ts` exists for the same class of problem: stock is per colourway and three
+that. `lib/scroll-lock.ts` exists so its logic can be tested at all: saving and restoring
+`body.style.overflow` per dialog is correct for one dialog and locks the page permanently for two,
+because the second saves the value the first set. That needs two overlays and a particular closing
+order, so it passes every single-dialog test and then strands someone mid-demo. The counting is
+pure and the reads and writes are injected, so six tests cover it without a DOM. `lib/product.test.ts` exists for the same class of problem: stock is per colourway and three
 places read it, so a test holds the size picker, the listing card and the link token route to the
 same numbers rather than trusting them to stay in step. No tests against live Mesh: slow, flaky, needs secrets in CI, and spends the sandbox balance.
 
@@ -704,10 +759,31 @@ No cart beyond one item, no accounts, no second Mesh flow, no confetti, no datab
 Redis instance the webhook needs, no component or state library, no mocked success states, no explorer
 link.
 
+**No onramp, and that is a decision rather than a gap.** It gets asked about, because "a customer
+with no crypto can still pay" is the obvious next capability, so it is worth saying why it is not
+here. Mesh defines the transfer type precisely:
+
+> **Onramp:** The user is using balances and linked payment methods in an exchange account to fund
+> the purchase of crypto **in their wallet on your platform**.
+
+That is a deposit flow for a business that holds wallets on behalf of its users: an exchange, a
+neobank, a trading app. WELT is a shoe shop. It has no wallet to deposit into, and giving it one is
+a different product with a licence attached. Building onramp here would mean demonstrating a Mesh
+feature by pretending to be a business we are not, which is worse than not showing the feature.
+
+The thing people actually mean when they ask for it is a different mechanism and it is already
+half-wired. `LinkTokenTransferOptions.fundingOptions` is a boolean permitting Mesh to "use the end
+user's available buying power and/or payment methods to supplement the cryptocurrency balance", and
+it is what the portfolio line is describing when it says *funded from your balance, then from your
+buying power, then from a payment method on file*. This build has never sent it, and on this
+sandbox client `transferBalanceFundingAvailability` reads `disabled`, which is the same switch that
+blocks conversion. So the honest position is that the capability is one boolean away and currently
+gated at Mesh's end, not that it needs a flow building.
+
 What a production build would add, in order: real order persistence and fulfilment; refund handling
 using the `RefundAddress` Mesh returns, and the `RefundPending` and `RefundSucceeded` statuses this
-build records against the order but does not act on; a `userId` derived from a real user record rather than a four-hour cookie; and the onramp flow, so
-a customer holding no crypto at all can still pay.
+build records against the order but does not act on; and a `userId` derived from a real user record
+rather than a four-hour cookie.
 
 ---
 

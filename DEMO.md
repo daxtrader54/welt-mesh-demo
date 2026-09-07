@@ -390,8 +390,12 @@ and Mesh does not resend. Those are in `MESH-NOTES.md` and they are the transfer
 
 Say these before someone finds them.
 
-- **No onramp.** `transferType: 'onramp'` would let someone holding no crypto pay by card through
-  their exchange. It is the obvious Mesh capability this build does not show.
+- **No onramp, and it is a decision.** Mesh defines onramp as funding crypto *in the user's wallet
+  on your platform*, which is a deposit flow for an exchange or a neobank. A shoe shop has no wallet
+  to deposit into. Building it would mean demonstrating a Mesh feature by pretending to be a
+  business we are not. The thing people mean when they ask for it, a customer with no crypto paying
+  anyway, is `fundingOptions` on the payment token instead: one boolean, never sent, and gated by
+  the same `transferBalanceFundingAvailability: disabled` that blocks conversion.
 - **Three capabilities are switched off for this sandbox client**: conversion, pay links, and the
   identity endpoint that returns the address the exchange already holds. All three would have made
   this better and none of them are ours to enable.
