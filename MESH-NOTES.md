@@ -187,8 +187,10 @@ which is neither the merchant refusing it nor the shopper being short, and those
 words on screen.
 
 `transferBalanceFundingAvailability.status` exists in the OpenAPI spec with values
-`disabled | available | requiresAmountLowering | notApplicable | unavailable`, but it is **not in
-the documented response example** and we have not observed it. Treat it as optional.
+`disabled | available | requiresAmountLowering | notApplicable | unavailable` and is **not in the
+documented response example**. It is returned, it is easy to miss, and it turned out to be the
+answer to the whole conversion question. On this client it reads `disabled` on every call,
+including the ones that succeed. See the `MeshBTC` run below.
 
 ---
 
@@ -221,7 +223,7 @@ PYUSD  eligible=true withFunding=false
 
 `withFunding=false` against an account holding 9,097 USDC and $398,000 of BTC. Not a restriction,
 the absence of a problem. To see conversion at all you need an account short of the collected asset,
-which in sandbox means `MeshBTC`.
+which in sandbox means `MeshBTC`. That run has now been done and it is the section below.
 
 **Unverified, and it is the crux.** Mesh's payment sheet shows an `Account` row and a `Pay with`
 row. Whether the second is tappable, and therefore whether a shopper can pick their funding asset
@@ -252,13 +254,137 @@ documented** anywhere; the phrase "clients with SmartFunding capabilities" is th
 basis. Marketing goes further than the docs do, claiming up to five combined funding sources and
 "any supported asset" converted; treat that as a sales claim.
 
-**Unknown, and it matters:** whether conversion fires when the shopper holds *zero* of the
-destination asset. The documented wording is about topping up an insufficient balance. The sandbox
-account `MeshBTC` holds BTC and no stablecoin, which is the only way to settle this question.
+**It does not fire on this client at all.** The documented wording is about topping up an
+insufficient balance, which left open whether conversion works when the shopper holds *zero* of the
+destination asset. It is not that. Conversion is switched off for us. Evidence below.
 
 Where it does happen, the SDK tells you: `transferPreviewed.payload.cryptocurrencyFundingOptions[]`
 carries the type, the asset used, the amount and the fee, and `executeFundingStep` fires per leg
 during execution with a status. Read them, or a conversion is invisible to your UI.
+
+---
+
+## The MeshBTC run: conversion is disabled for this client
+
+Run 6 September 2026, against `MeshBTC`, a sandbox Coinbase account holding **5 BTC worth $398,426
+and nothing else**. No stablecoin of any kind. That is the only account shape that asks the real
+question, and every earlier run had been made against accounts already flush with USDC, where
+`withFunding=false` is correct and proves nothing.
+
+The result is unambiguous, and the control is the part that makes it unambiguous. Same account,
+same auth token, same minute, changing only the destination:
+
+```
+BTC  -> a Bitcoin address     holdings: [ BTC  eligibleForTransfer=true  withFunding=false ]
+USDC -> an Ethereum address   holdings: [ ]
+both, in one request          holdings: [ BTC ]                       USDC absent
+```
+
+Mesh sees the BTC perfectly well and will spend it as BTC. Ask it to put that same BTC behind a
+USDC payment and it returns an empty list. Not BTC carrying a conversion fee. Nothing.
+
+And on all five calls, including the one that succeeded:
+
+```json
+"transferBalanceFundingAvailability": { "status": "disabled" }
+```
+
+**That is the finding.** It reads `disabled` even on the plain same-asset BTC send, so it is a
+property of the client and not an answer to the question being asked. The docs' phrase "clients with
+SmartFunding capabilities" has a concrete meaning: there is a flag, and ours is off. Which also
+retires the ambiguity this file carried for weeks, that BTC's absence might be specific to the
+BTC-to-USDC pair. It is not. No funding of any kind is available here.
+
+If you are debugging the same thing: read that one field before anything else. An empty `holdings`
+array with `status: succeeded` is not an error and does not look like a disabled feature, and we
+spent a long time treating a switched-off capability as an unexplained omission.
+
+**The echo test, finally run.** Adding a `DAI` destination, which this account cannot hold, returned
+no DAI holding. `configure` genuinely assesses the source account rather than reflecting
+`toAddresses` back at you. Stronger still, all three configure calls against different destination
+sets came back byte-identical, same `errorHash 3a9fe7de`, so on this client the destinations made no
+difference to the answer whatsoever. The residual doubt recorded above is closed.
+
+**One dead end worth not repeating.** Naming `BTC` as a destination symbol on the Ethereum network
+id is a 400, `invalidField`, "Network does not currently support the requested symbol." Obvious in
+hindsight. Use the Bitcoin network id `03dee5da-7398-428f-9ec2-ab41bcb271da`, which comes from
+`GET /api/v1/transfers/managed/networks`, 37 entries.
+
+**What to ask Mesh.** Not "does SmartFunding work", which invites a yes. Ask how
+`transferBalanceFundingAvailability` is moved off `disabled` for a client, and quote the response
+body. That is a support ticket with an answer in it rather than a conversation.
+
+**Corroborated by preview.** `POST /api/v1/transfers/managed/preview`, asked to send $50 of USDC
+from the same BTC-only account, answers `badRequest` / `emptyWalletBalance`, "Source wallet 'USDC'
+balance is empty." Not `requiresFunding`, which is a documented `PreviewTransferStatus` and exactly
+what should come back if funding were available. Mesh refuses rather than offering to fund.
+
+**One lever we have never pulled, and it should be pulled before anyone raises a ticket.**
+`LinkTokenTransferOptions.fundingOptions` is a real field, `{ enabled: boolean }`, and this build has
+never sent it. Its documented meaning is narrower than conversion: "permitted options to use the end
+user's available buying power and/or payment methods to supplement the cryptocurrency balance". So
+buying power and cards, not "convert my BTC". `ConfigureTransferRequest` has no equivalent field at
+all, which is consistent with `configure` reporting `disabled` as a client property rather than an
+answer about this request.
+
+Do not read a successful mint as proof it works. The link token endpoint accepted
+`fundingOptions: { enabled: "banana" }` with HTTP 200, so it does not validate that field and
+acceptance says nothing. The only test is opening such a token in Link with a short account.
+
+**What none of it changes.** There is still no field anywhere for the funding *asset*. `fundingOptions`
+is a boolean, not a choice. A merchant cannot offer a shopper "pay with BTC" whatever the flag says.
+Funding, where it happens, happens because the collected-asset balance is short, and the shopper's
+only possible say in it lives on the `Pay with` row of Mesh's own payment sheet. Two separate gaps,
+and only the first is a switch.
+
+---
+
+## Capabilities are gated per client, and Mesh tells you inconsistently
+
+Three features on this client are switched off, and finding that out took very different amounts of
+work each time.
+
+`generatePayLink: true` on a link token is refused outright:
+
+```
+badRequest / invalidField
+"GeneratePayLink is disabled and cannot be used."
+```
+
+`POST /api/v1/exchange/verify`, which returns the KYC profile the exchange holds for the user
+(`firstName`, `lastName`, `address`, `city`, `postalCode`, `countryCode`, and also `dateOfBirth`,
+`idType` and `idNumber`), is refused just as plainly:
+
+```
+permissionDenied
+"You do not have the necessary permissions to access this endpoint.
+ Please contact the Mesh team to request access."
+```
+
+Control, because a dead auth token would look the same: `holdings/get` with that same token in the
+same minute returns `ok`. It is the endpoint, not the connection. Its deprecated predecessor
+`POST /api/v1/account/verify` is now a bare 404.
+
+One call each, an unambiguous sentence each, done. Whereas conversion being off looks like an empty
+array and a `succeeded` status, with the actual answer in a `transferBalanceFundingAvailability`
+field that is not in the documented response example. Same underlying situation, one afternoon of
+difference.
+
+**So assume nothing about what your client has enabled, and probe rather than read.** A capability
+that appears in the docs, the OpenAPI spec and the SDK types can still be off for you, and only one
+of those two failure shapes will tell you so.
+
+Worth knowing which way each field fails, too. The link token endpoint minted a token for
+`fundingOptions: { enabled: "banana" }` without complaint, so it validates some fields strictly and
+ignores others entirely. A 200 from `/linktoken` is not evidence that a field did anything.
+
+**On `exchange/verify` specifically, if access is ever granted.** Prefilling a delivery address from
+the exchange's KYC record is a real UX win for a checkout, and the request takes an `accountInfo`
+array so you can name the fields you want. Ask for the four address fields and nothing else. The
+same response will hand you a date of birth and a passport number if you let it, and a shoe shop
+holding those is a data protection problem rather than a feature. Mesh also documents the payload as
+"available data varies by exchange and linked account", so it cannot be a required step in a
+checkout: treat anything that comes back as a prefill the shopper confirms, never as the address.
 
 ---
 
@@ -468,13 +594,10 @@ screens, and remember the sandbox MFA prompt appears twice.
 ## Things we could not find out
 
 - What any of the seven `CryptocurrencyFundingOptionType` values formally mean.
-- Whether conversion is automatic in Link or gated per client, and what sets
-  `transferBalanceFundingAvailability.status` to `disabled`.
-- How SmartFunding is enabled for a client.
-- Whether conversion fires when the shopper holds none of the destination asset.
-- Which brokers support conversion, and whether the sandbox does at all.
+- How `transferBalanceFundingAvailability` is moved off `disabled`. That it is gated per client is
+  now measured; what flips the gate is not documented anywhere we can find.
+- Which brokers support conversion, and whether any sandbox client has it enabled.
 - Whether the shopper sees a conversion choice or Mesh simply routes it.
-- Whether conversion is switched off for this client, or unavailable for BTC to USDC specifically.
-  `configure` omits the asset either way and the API does not say which.
 - Whether the `Pay with` row on Mesh's payment sheet is tappable, which decides whether a shopper
-  has any say in the funding asset at all.
+  has any say in the funding asset at all. Moot while funding is disabled, and the first thing to
+  check if it is ever enabled.

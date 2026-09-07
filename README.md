@@ -252,12 +252,29 @@ build made for a while. `configure` takes `fromAuthToken` and returns one entry 
 `eligibleForTransfer`, `eligibleForTransferWithFunding` and an `ineligibilityReason`. The second of
 those is the interesting one: it is Mesh saying it could pay with that asset by converting it.
 
-That is the mechanism. Whether it fires for this client is a separate question, and the honest
-answer is that it has not yet. Across every transfer on this account, all funding legs are
-same-asset: Mesh has never been observed converting one holding to settle in another. Asked
-directly about BTC against a $50 USDC-on-Ethereum destination, `configure` did not return it as
-eligible with funding. So the portfolio shows what Mesh actually says per holding rather than a
-promise about conversion, and `MESH-NOTES.md` records the measurement.
+That is the mechanism. Whether it fires for this client is a separate question, and it has now been
+answered: it does not, because conversion is switched off for us. Connecting the `MeshBTC` sandbox
+account, which holds 5 BTC and no stablecoin at all, and asking `configure` what can fund a $50 USDC
+payment returns an empty list. The control is what makes that conclusive. The same account in the
+same minute, asked about a *BTC* destination, returns the BTC as eligible. Mesh will spend the BTC
+as BTC and will not put it behind a USDC payment.
+
+The reason is one field that is in the OpenAPI spec but not in the documented response example:
+
+```json
+"transferBalanceFundingAvailability": { "status": "disabled" }
+```
+
+It reads `disabled` on every call, including the ones that succeed, so it is a property of the
+client rather than an answer about the assets. Mesh's docs say "clients with SmartFunding
+capabilities"; this is what not having them looks like from the outside. So the portfolio shows what
+Mesh actually says per holding rather than a promise about conversion, and `MESH-NOTES.md` carries
+the full run.
+
+Worth being clear about what that does and does not explain. Even with the flag on, the link token
+has no field for the funding asset, so a merchant still cannot offer a shopper a choice of what to
+pay with. Conversion would simply start happening when the collected-asset balance is short. Two
+separate limits, and only the first one is a switch.
 
 **Three endpoints, three different names for the same connection.** `holdings/get` requires
 `sandboxCoinbase` and rejects `coinbase`. `transfers/managed/quote` does the exact reverse. Only
@@ -661,16 +678,16 @@ Every sandbox account uses password `Pass123` and code `123456`.
 | `Mesh2` | Empty | A genuine `transferNoEligibleAssets` |
 | `Mesh3` | Cash only | Onramp-shaped accounts |
 | `Mesh4` | Large | Big balances |
-| `MeshBTC` | BTC, no stablecoin | Whether Mesh will convert to fund a USDC settlement |
+| `MeshBTC` | BTC, no stablecoin | Conversion being disabled, seen from the outside |
 
 These are in the panel's Demo tab, because failure states should be shown for real rather than
 described. Nothing here is mocked and no failure is simulated.
 
 Two things worth knowing before you use them. The balances are shared with every other Mesh sandbox
 user, so an account that was funded yesterday may not be today, and each run through spends about
-$50. And `MeshBTC` is the account that answers the conversion question above: connect it and watch
-the panel's Integration tab to see what `configure` says about a BTC holding against a USDC
-destination.
+$50. And `MeshBTC` is the account that answered the conversion question above: connect it and watch
+the panel's Integration tab report an empty funding list against $398,000 of BTC, which is what a
+disabled capability looks like from a merchant's side.
 
 **The sandbox is not Coinbase.** The login form is served by Mesh, not the exchange, and typing real
 exchange credentials into it sends them somewhere they should not go. That is why the warning sits on

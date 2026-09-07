@@ -3,11 +3,17 @@ import type { NextConfig } from 'next'
 // Mesh Link renders in an iframe from sandbox-web.meshconnect.com (production uses web.meshconnect.com),
 // and pulls integration logos from file-cdn.meshconnect.com. Both have to be allowed explicitly or the
 // overlay is a blank grey box with no console error.
+const dev = process.env.NODE_ENV !== 'production'
+
 const csp = [
   "default-src 'self'",
   // 'unsafe-inline' is load-bearing for Next's bootstrap; 'unsafe-eval' is not, and no shipped
-  // chunk uses eval or new Function, so it is not granted.
-  "script-src 'self' 'unsafe-inline'",
+  // chunk uses eval or new Function, so production never gets it.
+  //
+  // React's development build does use eval, to rebuild callstacks that cross the server/client
+  // boundary. Without it every page load throws a console error that looks like a real fault and
+  // sends you hunting through the wrong layer. Granted in dev only, so what ships is unchanged.
+  `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ''}`,
   "object-src 'none'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: https://file-cdn.meshconnect.com",
