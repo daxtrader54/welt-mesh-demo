@@ -36,173 +36,203 @@ The rest of the pre-flight, in order:
 - If you pushed anything today, confirm the live page actually contains it. Vercel has queued deploys
   on this project anywhere from fifteen seconds to eleven minutes. A 200 means the site is up, not
   that it is your build.
-- Have the sandbox logins to hand: `Mesh`, `Mesh2` (empty), `Mesh3` (cash only), `Mesh4` (large),
-  `MeshBTC` (BTC only). Password `Pass123`, code `123456`. They are in the panel's Demo tab too.
+
+### The sandbox logins
+
+These are Mesh's own test accounts, reached through the Coinbase or Binance option inside Mesh Link.
+They are not ours and there is no sign-up: Mesh provides them so integrations can be built against
+real API behaviour. All use password `Pass123` and MFA code `123456`, and they are listed in the
+panel's Demo tab so you do not have to remember them mid-demo.
+
+| Username | What it holds | Use it to show |
+|---|---|---|
+| `Mesh` | A full portfolio | The happy path. This is your demo account. |
+| `Mesh2` | Nothing at all | A real `transferNoEligibleAssets` and the designed empty state |
+| `Mesh3` | Cash, no crypto | An account shaped for onramp rather than transfer |
+| `Mesh4` | Large balances | Big numbers, if anyone wants to see them |
+| `MeshBTC` | Bitcoin, no stablecoin | That conversion is switched off for this client |
 
 ---
 
 ## The walkthrough
 
-What follows is a script. **Bold** is what you do, the indented lines are what you say. Say them in
-your own words, but the beats are in this order for a reason: each one answers the question the last
-one raises.
+**Bold** is what you do, the indented lines are what you say. Say them in your own words, but keep
+the order: each beat answers the question the last one raises.
 
-Total is about nine minutes without questions.
+About nine minutes without questions.
 
 ---
 
 ### 1. The shop (30 seconds)
 
-**Land on https://welt-mesh-demo.vercel.app. Do not touch anything yet.**
+**Land on https://welt-mesh-demo.vercel.app.**
 
-> This is WELT. Clearance retailer, one shoe, four colourways, fifty dollars. I want you to look at
-> the whole page for a second and tell me what is missing.
+> This is WELT. Clearance retailer, one shoe, four colourways, fifty dollars. It is built as an
+> ordinary shop front, and the crypto side is deliberately quiet.
 
-**Pause. Let them look.**
+**Point at the "Crypto accepted: USDC · USDT · PYUSD" strip.**
 
-> There is no wallet button. No "connect web3". The word crypto does not appear anywhere, and
-> neither does Mesh. That is deliberate, and it is the first thing your customers would notice if we
-> got it wrong.
+> That is the only mention on the whole page, and it names the assets rather than saying "crypto
+> accepted" and leaving it vague. No wallet button, no connect-web3, no mention of Mesh anywhere.
+> Your customers should meet the infrastructure at checkout and nowhere else.
 
 **Pick the charcoal colourway, then UK 9.**
 
-> Sizes are per colourway, so some of these are genuinely out of stock rather than decorative.
+> Stock is per colourway, so some of these sizes are genuinely gone.
 
 ### 2. Bag and delivery (30 seconds)
 
 **Add to bag. Continue. On delivery, click Fill in a sample address.**
 
-> Normal shop, normal checkout. Bag, address, pay. Nothing interesting yet, which is the point.
+> Normal shop, normal checkout. Bag, address, pay.
 
 ### 3. Checkout (1 minute)
 
-**Land on the checkout. Point at the three payment options.**
+**Point at the three payment options.**
 
-> Card, Apple Pay, crypto account. I will be straight with you: the card and Apple Pay options are
-> for show, and the app says so if you click them. Everything else you are about to see is a real
-> call against Mesh's sandbox.
+> Card and Apple Pay are for show, and the app says so if you click them. Everything from here is a
+> real call against Mesh's sandbox.
 
 **Point at the crypto button.**
 
-> Now look at this button. It is Coinbase blue, with the Coinbase mark, and I did not hardcode
-> either of those. Mesh publishes a brand palette and a logo set for every exchange in its
-> catalogue, light and dark, and the page reads it live. If your customer's account were Binance
-> this button would be yellow.
+> This button is Coinbase blue with the Coinbase mark, and neither is hardcoded. Mesh publishes a
+> brand palette and a logo set for every integration it supports, light and dark, and the page reads
+> it live. Connect a Binance account and the button turns Binance yellow. The button they press
+> matches the screen it opens.
 
-> Small thing. But the button they press now looks like the screen it opens, so handing off to their
-> exchange does not feel like leaving your site.
+**Point at the sentence under the button. It reads something like "Coinbase and Binance can fund
+this payment in USDC on Ethereum. Kraken, Robinhood, CashApp and Uphold can too, on a live
+account."**
 
-**Point at the line underneath.**
+> That sentence is generated, not written. Mesh publishes a list of every exchange and wallet it
+> integrates with, and which assets and networks each one can send. We ask it who can send USDC on
+> Ethereum to our address, and print the answer.
 
-> And that line is the live catalogue too. It is telling you who can actually settle this payment,
-> in USDC, on Ethereum, today. Not a marketing list. If Kraken could not reach us, it would say so.
+> It splits in two on purpose. The first group can do it here, today, in the sandbox. The second
+> could do it on a live account. If Kraken dropped USDC on Ethereum tomorrow, this sentence would
+> change on its own and nobody would have to remember to edit it.
 
 ### 4. Connect (1 minute)
 
-**Press the button. Mesh Link opens, embedded.**
+**Press the button. Mesh Link opens.**
 
-> This is Mesh Link. I have not built any of it. It is one script tag and a token my server minted,
-> and it handles every exchange in that catalogue.
+> This is Mesh Link and I have built none of it. One script tag, plus a token my server mints for
+> the session. The same component handles every exchange and wallet in that list, so adding Kraken
+> is not an integration, it is already here.
 
-**Log in: `Mesh` / `Pass123` / code `123456`.**
+**Log in as `Mesh`, password `Pass123`, code `123456`.**
 
 **While the login is on screen, point at the warning strip.**
 
-> Worth saying out loud: that login form is served by Mesh, not by Coinbase. Never type real
-> exchange credentials into a sandbox. We put that warning there because someone will otherwise try.
+> That login form is served by Mesh, not by Coinbase. Never type real exchange credentials into a
+> sandbox.
 
-### 5. The portfolio, and this is the part that is not about payments (90 seconds)
+### 5. The portfolio (2 minutes, and it is not about payments)
 
-**Wait for the portfolio to fill in. Let them read it.**
+**Wait for the holdings to fill in. Let them read it.**
 
-> One login, and we can now see what this customer holds. Balances, fiat values, and Mesh's own
-> verdict on each asset.
+> One login, and we can see what this customer holds. Balances, fiat values, and a verdict per
+> asset.
 
 **Point at the three assets at the top, then at ALSO HELD.**
 
-> The top three can settle this order. The eleven underneath say "cannot reach this merchant",
-> because we collect stablecoins on Ethereum and those cannot get there.
+> The top three can settle this order. The eleven underneath say "cannot reach this merchant". We
+> collect stablecoins at an address on Ethereum, and Bitcoin cannot arrive at an Ethereum address.
 
-> That verdict is Mesh's, not mine. I am not comparing a balance against a price, which is the
-> obvious way to do this and it is wrong: it misses the exchange's withdrawal minimum, the fees, and
-> the fact that Mesh can cover a shortfall from buying power or a card on file. One call per asset,
-> and Mesh answers.
+**If they ask about the Bitcoin, and someone always does:**
 
-**Then the important line:**
+> Fair question, and the accurate answer is more interesting than the salesy one. Mesh has a feature
+> called SmartFunding that converts one holding to fund a payment in another. It is in the API and in
+> the docs. So in principle your customer could hold only Bitcoin and still pay you in USDC.
 
-> Notice what your customer has not done. They have not copied an address. They have not withdrawn
-> anything. They have not swapped anything, and they never had to find out what you accept. That is
-> the whole product. Mesh is not a wallet connect button, it is the layer that makes those four
-> steps disappear.
+> Two things stop it here. First, it is switched off for this sandbox client, and I tested that
+> rather than assuming it. I connected an account holding five Bitcoin and no stablecoin at all,
+> asked Mesh what could fund a fifty dollar USDC payment, and got an empty list. Asked about a
+> Bitcoin destination in the same minute, it returned the Bitcoin as eligible. Every response carries
+> a field reading `transferBalanceFundingAvailability: disabled`.
 
-### 6. The payment route (1 minute)
+> Second, and this one survives the switch being flipped: the customer never picks. There is no field
+> anywhere in Mesh's API for the funding asset, so a merchant cannot offer "pay with Bitcoin" as a
+> choice on a checkout. Mesh decides at payment time, spending the collected asset when the balance
+> covers it and converting something else when it does not. If conversion were enabled here it would
+> simply happen, and the receipt would name it afterwards.
 
-**Point at the route diagram.**
+> `MESH-NOTES.md` has the response bodies if you want them.
 
-> This fills in as the payment happens, and every row is stamped by a real Mesh event as it arrives.
-> Nothing here is on a timer, and there is no spinner. If a row stays blank it is because that step
-> did not happen.
+**Back to the main thread. Point at the verdicts again.**
 
-> I am making a point of that because every demo you have been shown has a progress bar that always
-> completes. This one can genuinely stop halfway, and if it does, that is information.
+> Those verdicts are Mesh's, not mine. The obvious way to build this is to compare a balance against
+> a price, and it is wrong: it misses the exchange's withdrawal minimum, the fees, and the fact that
+> Mesh can cover a shortfall from buying power or a card on file. One call per asset, and Mesh
+> answers.
+
+**Point at the struck-through line under Paying from: Copy a wallet address, Withdraw from your
+exchange, Swap or move funds, Work out what we accept.**
+
+> And this is the product. Four things your customer would normally have to do to pay you from an
+> exchange balance, none of which happened. Mesh is not a wallet connect button. It is the layer that
+> makes those four disappear.
+
+### 6. Payment trace (1 minute)
+
+**Scroll to the section headed Payment trace, below the checkout.**
+
+> Seven rows, each stamped by a real Mesh event as it arrives. Nothing runs on a timer, there is no
+> spinner, and a row that stays blank is a step that genuinely did not happen. If this stops halfway,
+> that is information rather than a hang.
 
 ### 7. Pay (90 seconds)
 
 **Press Pay.**
 
-> Second Link session. Notice it went straight to the account they already connected. No second
-> picker, because being asked to choose your exchange twice in one checkout is confusing.
+> Second Link session, opening straight on the account they already connected. No second picker,
+> because being asked to choose your exchange twice in one checkout is confusing.
 
-**MFA `123456`. Approve. Watch the route fill in.**
+**MFA `123456`. Approve. Watch the trace fill in.**
 
-> Preview. Initiated. Executed. All real events.
+> Preview. Initiated. Executed. Real events.
 
-**The receipt prints, the product picture takes a YOURS stamp.**
+**The receipt prints and the product picture takes a YOURS stamp.**
 
-> Fifty dollars, in USDC, on Ethereum, from Coinbase, to our address.
+> Fifty dollars in USDC, on Ethereum, from Coinbase, to our address.
 
 ### 8. Paid is not settled (1 minute)
 
 **Point at the status on the receipt. It says Paid.**
 
-> Here is the bit I actually want you to take away, because it is the difference between a demo and
-> a payment system.
+> This is the part worth your attention, because it is the difference between a demo and a payment
+> system.
 
-> That says paid, not settled. What just happened is that the customer's browser told us the
-> exchange acknowledged the withdrawal. That message ran on their machine. It can be lost, it can be
-> forged, and exchanges can fail a transfer hours later.
+> It says paid, not settled. What happened is that the customer's browser told us the exchange
+> acknowledged the withdrawal. That message ran on their machine. It can be lost, it can be forged,
+> and exchanges can fail a transfer hours later.
 
-**Wait. Between six and thirty-four seconds. It flips to Settled.**
+**Wait. Six to thirty-four seconds. It flips to Settled.**
 
-> There. That changed because a webhook arrived from Mesh, signature verified, server side. That is
-> the only thing in this system allowed to say you have been paid.
-
-> If you take one thing from today: never let the browser mark an order as paid.
+> That changed because a webhook arrived from Mesh, signature verified, server side. It is the only
+> thing in this system allowed to say you have been paid. Never let the browser mark an order paid.
 
 ### 9. Behind the payment (2 minutes, only if the room is technical)
 
-**Open the panel.**
-
-> Everything you just watched, with the working shown.
+**Open the panel from the handle on the right edge, or start with `?demo=1` to have it docked.**
 
 **Events tab.**
 
-> The real SDK lifecycle in order, with timings. That is what actually fired.
+> The SDK lifecycle in order, with timings. What actually fired, unfiltered.
 
 **Integration tab.**
 
-> What Mesh said about this account. Eligibility per asset and whether each could fund the payment.
+> What Mesh said about this account. Eligibility per asset, and whether each could fund the payment.
 
 **Ledger tab.**
 
-> The order, and its webhook deliveries. Note there are two, about twenty-four seconds apart. Mesh
-> sends two per transfer as the norm, and if you let the last one win you can un-settle a settled
-> order. We found that the hard way.
+> Mesh's own record rather than ours, so it survives the tab closing. Every transfer, with the
+> funding legs each one used. If a conversion ever happened, it would be named on that row.
 
 **Providers tab.**
 
-> And when someone asks "could you take Kraken as well", this answers it with the live catalogue
-> rather than a promise.
+> And when someone asks whether you could take Kraken as well, this answers from the live list rather
+> than from a promise.
 
 ---
 
@@ -212,7 +242,7 @@ Most of these are worth showing on purpose if you have the time.
 
 | What happens | What to do |
 |---|---|
-| Portfolio is empty | Connect `Mesh2` and show the designed empty state. It is real, not mocked. |
+| Portfolio is empty | Reconnect as `Mesh2`, the deliberately empty sandbox account, and show the designed empty state. It is real, not mocked. |
 | Link is a blank grey box | The origin is not registered with Mesh. You are on a preview URL. Move to the production domain. |
 | Balance too low to pay | Say so. The sandbox is shared and it drains. Then show the failure state, which is the honest version of this. |
 | No settlement | Give it 45 seconds before saying anything. Quicker than that reports "no webhook" for payments that settled. |
@@ -227,7 +257,7 @@ run does not need another sign-in.
 
 **"Can my customer choose to pay in Bitcoin?"**
 
-No, and be precise about why, because there are two reasons and only one of them is a switch.
+No, and there are two reasons. Only one of them is a switch.
 
 Mesh's link token has no field for the funding asset, so a merchant cannot offer that choice at all.
 Mesh decides at payment time.
@@ -271,10 +301,12 @@ and Mesh does not resend. Those are in `MESH-NOTES.md` and they are the transfer
 
 Say these before someone finds them.
 
-- **Never run on a real handset.** Exercised at phone widths in a desktop browser, and Link switches
-  from embedded to overlay below 1024px, which is the part most likely to be wrong.
 - **No onramp.** `transferType: 'onramp'` would let someone holding no crypto pay by card through
   their exchange. It is the obvious Mesh capability this build does not show.
 - **Three capabilities are switched off for this sandbox client**: conversion, pay links, and the
   identity endpoint that returns the address the exchange already holds. All three would have made
   this better and none of them are ours to enable.
+
+Mobile has been run on a real handset and works, including the switch from an embedded Link frame to
+an overlay on a narrow screen, which is the part that had never been exercised outside a desktop
+browser.

@@ -116,7 +116,45 @@ export function FundingSource({
           Change account
         </button>
       </div>
+
+      <SkippedSteps />
     </section>
+  )
+}
+
+/**
+ * The four chores that did not happen.
+ *
+ * This is the product argument, and until now it was only ever said out loud in a demo. Paying a
+ * merchant from an exchange balance normally means finding the merchant's address, copying it,
+ * withdrawing to it, and first working out which of your assets they will even take. None of that
+ * happened here, and the absence is invisible precisely because it is an absence.
+ *
+ * Struck through rather than ticked. A tick reads as "done", which is the opposite of the point.
+ *
+ * One line, at `note` size, under a control that is already there. The checkout was deliberately
+ * quietened down to the decision it is asking for and this must not undo that, so it is four
+ * fragments on a single row rather than a panel with a heading and an explanation.
+ */
+const SKIPPED = [
+  'Copy a wallet address',
+  'Withdraw from your exchange',
+  'Swap or move funds',
+  'Work out what we accept'
+]
+
+function SkippedSteps() {
+  return (
+    <div className="mt-3">
+      <span className="label">You did not have to</span>
+      <ul className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+        {SKIPPED.map(step => (
+          <li key={step} className="note line-through" style={{ textDecorationColor: 'var(--color-rule-strong)' }}>
+            {step}
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

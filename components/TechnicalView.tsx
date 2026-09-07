@@ -872,7 +872,17 @@ export function TechnicalView({
    */
   if (docked) {
     return (
-      <aside className="sticky top-0 hidden h-screen w-[26rem] shrink-0 border-l border-rule xl:block">
+      /**
+       * `xl:flex flex-col`, not `xl:block`.
+       *
+       * Same flex chain bug the sheet already had, in the other layout, and it went unnoticed
+       * because it only bites the tab with the most rows. `body` is `flex min-h-0 flex-1`, which
+       * needs a flex parent with a real height to resolve against. On a block parent `flex-1` does
+       * nothing, the body grows to fit its content, and the `overflow-y-auto` inside it never gets
+       * a bounded height to scroll within. The ledger lists 25 transfers, so the ledger is where
+       * you find out: it runs off the bottom of the screen with no way to reach the end of it.
+       */
+      <aside className="sticky top-0 hidden h-screen w-[26rem] shrink-0 flex-col border-l border-rule xl:flex">
         {body}
       </aside>
     )
