@@ -20,5 +20,10 @@ additional-context.md
 # The audit of the app against that brief. Same reason.
 AUDIT.md
 
+# The working to-do list. Its own second line says to delete it before submitting, so it is kept
+# locally and out of the repo rather than published with the work. DEMO.md covers the part a
+# reader actually needs.
+HANDOVER.md
+
 # A saved copy of the rendered page, from poking at the running app. Scratch, not source.
 shop.html
