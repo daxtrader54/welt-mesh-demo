@@ -10,16 +10,21 @@ validates the origin Link opens from, and every commit gets a new preview domain
 
 ## Before you start
 
-**Check the sandbox has money in it.** This is the one that will actually bite you. The Mesh sandbox
-accounts are shared with every other Mesh sandbox user in the world, and each run through spends
-about $50. On 6 September the `MeshBTC` account held 5 BTC worth $398,426. Eleven hours later it
-held nothing at all, and nobody here touched it.
+**Check the sandbox has money in it.** The Mesh sandbox accounts are shared with every other Mesh
+sandbox user in the world, and each run through spends about $50, so a balance that was there
+yesterday is not guaranteed to be there today.
 
 So an hour before, connect an account and look at the portfolio panel. If it is full, demo the happy
 path. If it is empty you have not lost the demo, you have a different one: an empty account produces
 a real `transferNoEligibleAssets` and a designed failure state, and "here is what happens when it
 goes wrong, and no, it is not mocked" is a strong five minutes in front of an engineer. Know which
 demo you are giving before you open the laptop.
+
+Check it **in the app**, not with a curl. An expired auth token does not fail the way you expect:
+`holdings/get` answers HTTP 200 with an envelope status of `ok`, an empty positions array, and the
+real answer buried in `content.status: notAuthorized`. Read it quickly and a live account looks like
+a drained one. The app gets this right and prints an expired connection as an expired connection,
+which is the whole reason to check there.
 
 The rest of the pre-flight, in order:
 

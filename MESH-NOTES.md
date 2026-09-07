@@ -45,6 +45,14 @@ shipped a fix for the first shape, felt confident, and shipped the same bug agai
 token can only ever produce shape one. You need a real, expired token to see shape two, which means
 you will meet it in a demo rather than in a test.
 
+**And shape two wears a convincing disguise.** The envelope reads `status: ok`, the HTTP code is
+200, and `cryptocurrencyPositions` comes back as `[]`. Read at a glance, an expired connection is
+indistinguishable from an account someone has emptied, and the wrong conclusion is a plausible one:
+the sandbox balances *are* shared and they *do* drain, so "the account is empty" fits the facts you
+can see. It cost an hour and a wrong claim in a document. The tell is `content.status`, and it is
+the only tell. `getPortfolio` in `lib/mesh/client.ts` checks it; a curl at the terminal does not,
+which is an argument for debugging through the app rather than around it.
+
 The same fault also reaches the SDK, as `transferConfigureError`, and the message there is not
 reliable either: **"Please login again to continue."** once and **"An error has occurred."** the
 next time, for the identical cause. What *is* reliable is whether you passed stored `accessTokens`
