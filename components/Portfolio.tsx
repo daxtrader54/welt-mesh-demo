@@ -1,5 +1,7 @@
 'use client'
 
+import Image from 'next/image'
+
 import { token, usd } from '@/lib/format'
 import { PRODUCT } from '@/lib/product'
 
@@ -90,7 +92,8 @@ export function Portfolio({
   quotes,
   funding,
   selected,
-  onSelect
+  onSelect,
+  brand
 }: {
   provider: string
   accountName: string | null
@@ -105,6 +108,15 @@ export function Portfolio({
   funding: AssetFunding[] | null
   selected: string | null
   onSelect: (symbol: string) => void
+  /**
+   * The connected exchange's own colours and mark, from Mesh's catalogue.
+   *
+   * The checkout hands the shopper to a Coinbase-blue screen and used to hand them back to a page
+   * with no trace of it, which read as two different products bolted together. Carrying the mark
+   * and the accent through says the account is still the thing being spent from. Null whenever
+   * Mesh published no palette, and everything falls back to the house ink.
+   */
+  brand?: { button: string; text: string; icon: string | null } | null
 }) {
   const quoteFor = (symbol?: string | null) => quotes?.find(q => q.symbol === symbol) ?? null
 
@@ -126,6 +138,17 @@ export function Portfolio({
   const chosenSymbols = new Set(choosable.map(p => p.symbol))
   const rest = positions.filter(p => !chosenSymbols.has(p.symbol))
 
+  /**
+   * How many of the rest Mesh assessed and did not return, which means it saw no route from that
+   * asset to this merchant.
+   *
+   * Counted so the verdict can be stated once instead of printed on every row. Eleven rows each
+   * ending "cannot reach this merchant" is eleven repetitions of one fact, and it turned the most
+   * interesting thing on the page, that this customer is holding four hundred thousand dollars,
+   * into a wall of identical grey text. The rows that say something different still say it.
+   */
+  const unroutable = rest.filter(p => funding && !funding.some(f => f.symbol === p.symbol)).length
+
   return (
     <section className="rule-t pt-5">
       {/**
@@ -135,16 +158,33 @@ export function Portfolio({
        * the account more weight than the asset the shopper is actually choosing and pushed the
        * choice itself further down a phone.
        */}
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <p className="text-sm">
-          <span className="label">Held at</span>{' '}
-          <span className="font-semibold">{provider}</span>
-          {accountName && <span className="text-muted"> · {accountName}</span>}
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <p className="flex items-center gap-2 text-sm">
+          {/* The exchange's own mark, from Mesh's catalogue. It is the same asset Link just showed
+              them, which is the point: this is still their Coinbase account. */}
+          {brand?.icon && (
+            <Image src={brand.icon} alt="" width={18} height={18} className="shrink-0" unoptimized />
+          )}
+          <span>
+            <span className="label">Held at</span>{' '}
+            <span className="font-semibold">{provider}</span>
+            {accountName && <span className="text-muted"> · {accountName}</span>}
+          </span>
         </p>
+        {/**
+         * The total, at a size worth reading.
+         *
+         * It was `label`-sized on the right of a row, which is where you put a footnote. It is the
+         * most striking number on the page: this shop just found out, from one sign-in, that the
+         * customer is holding four hundred thousand dollars. Printing that in 11px was the single
+         * biggest reason the page read flat next to the screen before it.
+         */}
         {cryptoValue !== null && (
-          <p className="text-sm">
-            <span className="label">Crypto value</span>{' '}
-            <span className="data font-medium">{usd(cryptoValue)}</span>
+          <p className="text-right">
+            <span className="label block">Crypto value</span>
+            <span className="data text-lg font-semibold leading-tight tracking-tight">
+              {usd(cryptoValue)}
+            </span>
           </p>
         )}
       </div>
@@ -186,15 +226,30 @@ export function Portfolio({
                     onClick={() => onSelect(q.symbol)}
                     aria-pressed={active}
                     className={`flex w-full items-center gap-3 border px-3 py-2.5 text-left transition-colors ${
-                      active ? 'border-2 border-ink bg-plate' : 'mb-px border-rule hover:border-ink'
+                      active ? 'border-2 bg-plate' : 'mb-px border-rule hover:border-ink'
                     }`}
+                    style={
+                      active && brand ? { borderColor: brand.button } : undefined
+                    }
                   >
+                    {/* The selected row is the one thing on this page that is about the connected
+                        account rather than the merchant, so it is the one thing that wears the
+                        exchange's colour. Falls back to ink when Mesh published no palette. */}
                     <span
-                      className="grid h-4 w-4 shrink-0 place-items-center rounded-full border"
-                      style={{ borderColor: active ? 'var(--color-ink)' : 'var(--color-rule-strong)' }}
+                      className={`grid h-4 w-4 shrink-0 place-items-center rounded-full border ${
+                        active ? '' : 'border-rule-strong'
+                      }`}
+                      style={
+                        active ? { borderColor: brand?.button ?? 'var(--color-ink)' } : undefined
+                      }
                       aria-hidden
                     >
-                      {active && <span className="h-2 w-2 rounded-full bg-ink" />}
+                      {active && (
+                        <span
+                          className="h-2 w-2 rounded-full"
+                          style={{ background: brand?.button ?? 'var(--color-ink)' }}
+                        />
+                      )}
                     </span>
 
                     <span className="data w-16 shrink-0 text-sm font-semibold">{p.symbol}</span>
@@ -233,7 +288,12 @@ export function Portfolio({
       {rest.length > 0 && (
         <details className="rule-t mt-5 pt-3">
           <summary className="flex cursor-pointer items-baseline justify-between gap-4 list-none">
-            <span className="label">Also held ({rest.length})</span>
+            <span className="label">
+              Also held ({rest.length})
+              {unroutable === rest.length && (
+                <span className="text-muted"> · none can reach this merchant</span>
+              )}
+            </span>
             <span className="note underline underline-offset-2">Show</span>
           </summary>
 
@@ -267,11 +327,12 @@ export function Portfolio({
                     </span>
                   ) : f ? (
                     <span className="note shrink-0">{why ?? 'not eligible for this order'}</span>
-                  ) : funding ? (
+                  ) : funding && unroutable !== rest.length ? (
                     /**
-                     * Mesh assessed the account and did not return this symbol, which means it did
-                     * not consider it able to reach the merchant's address. Said plainly rather
-                     * than left blank, because a blank was being read as a refusal and this is one.
+                     * Mesh assessed the account and did not return this symbol, which means it saw
+                     * no route to the merchant's address. Printed per row only when the list is
+                     * mixed and this row differs from its neighbours. When every row says it, the
+                     * summary above says it once and these stay quiet.
                      */
                     <span className="note shrink-0 text-faint">cannot reach this merchant</span>
                   ) : null}

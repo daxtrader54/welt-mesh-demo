@@ -77,74 +77,55 @@ About nine minutes without questions.
 **Land on https://welt-mesh-demo.vercel.app.**
 
 > This is WELT.
-> A pretend clearance retailer
-> one shoe, four colours, fifty dollars.
+> A mock up of an online sports shoe retailer
+> In this case the shoe is the "Skechers Sport Track Syntac" trainer
+> four colours, costing fifty dollars 
+> you can click around the site and purchase any of the trainers
 > It is built as an ordinary shop front.
+> to simulate a normal shopping experience 
+> the mesh magic is added from checkout 
+> so let's jump in
 
 **Point at the "Crypto accepted: USDC · USDT · PYUSD" strip.**
 
 > At this stage, there is no mention of Mesh.
-> But the shop accepts crypto.
-> With no sign in with wallet button, no connect-web3 ux
-> The shop experience remains normal.
-> The customers will meet Mesh at the checkout
-
-**Take a look around**
-
-> So we four choices, we have some reviews.
-> And some specs,
-> And some short small print for the site.
-
-**Pick the charcoal colour, then UK 9.**
-
-> Let's pick a shoe and see what we can do.
+> But we know it has four trainers, and the shop accepts crypto.
+> TAKE A LOOK AROUND
+> Let's pick a shoe and buy one
 
 ### 2. Bag and delivery (30 seconds)
 
-**Add to bag. Continue. On delivery, click Fill in a sample address.**
-
-> Add it to the bag.
-> Let's continue to checkout.
-> We can choose an address, or select random details.
-> These will save for next time too.
-> Normal shop, normal checkout.
-> Bag, address, pay.
+> Add to bag and go to checkout.
+> Do address.
+> Continue to payment
 
 ### 3. Checkout (1 minute)
 
-**Point at the three payment options.**
-
-> Three payment options leading with crypto.
+> Three payment options.
 > Card and Apple Pay are for show,
 > clickable but the app won't support them.
-> Crypto only.
-> Everything from here is a real call against Mesh's sandbox.
+> "We're gonna pick CHOOSE YOUR EXCHANGE... button" 
+> And this is where Mesh enters the chat
+> everything from here is a real call against Mesh's sandbox.
+> and we start tracking all the mesh events in real time
 
 **Point at the crypto button. It reads "Choose your exchange or wallet".**
 
-> We do not name an exchange, because nothing has been chosen yet.
-> Where your money is held is the one decision that is genuinely the customer's,
-> and a merchant's page should not be answering it for a first-time user.
-
-**Point at the sentence under it: "Coinbase and Binance can fund this payment in USDC on Ethereum.
-Kraken, Robinhood, CashApp and Uphold can too, on a live account."**
-
-> That sentence is generated, not written.
-> Mesh publishes a list of every exchange and wallet it integrates with,
-> and which assets and networks each one can send.
-> The app asks who can send USDC on Ethereum to our address, and then prints the answer.
+> In the crypto account section:
+> We haven't selected any exchange yet.
+> The customer will need to pick here.
+> "SMASH BUTTON"
 
 ### 4. Connect (1 minute)
 
-**Press the button. Mesh Link opens on the full picker.**
+> This is Mesh Link 
+> To integrate it was one script tag, plus a token my server mints for the session.
+> Here we have "the picker"
 
-> This is Mesh Link and I have built none of it.
-> To integrate it was one script tag,
-> plus a token my server mints for the session.
-
-> The list your customer is looking at now is the same one that generated that sentence.
+> This is an example list that your customer can choose from
 > Everything on it is already integrated.
-> Adding Kraken is not a project with a timeline, it is a customer tapping Kraken.
+> In production, adding Kraken is not a project with a timeline, it is a customer tapping Kraken.
+> You can configure all the exchanges shown easily, these are the ones I chose.
 
 **Pick Coinbase.**
 
@@ -153,7 +134,6 @@ Kraken, Robinhood, CashApp and Uphold can too, on a live account."**
 **While the login is on screen, point at the warning strip.**
 
 > That login form is served by Mesh, not by Coinbase.
-> Never type real exchange credentials into a sandbox.
 
 **Once it closes, point at the button again. It now reads "Continue with Coinbase", in Coinbase
 blue, with the Coinbase mark.**
@@ -162,63 +142,18 @@ blue, with the Coinbase mark.**
 > Mesh publishes a brand palette and a logo set for every integration it supports, light and dark,
 > and the page reads it live.
 > Had they picked Binance, that button would be Binance yellow.
-> So the checkout now matches the account behind it.
+
 
 ### 5. The portfolio (2 minutes, and it is not about payments)
 
-**Wait for the holdings to fill in. Let them read it.**
-
-> One login, and we can see what this customer holds.
+> Styling aside, the checkout now matches the account behind it.
+> One login, and we can see all the assts this customer holds.
 > Balances, fiat values, and a verdict per asset.
-
-**Point at the three assets at the top, then at ALSO HELD.**
 
 > The top three assets here can settle this order now.
 > The eleven underneath say "cannot reach this merchant".
-> We collect stablecoins at an address on Ethereum, and Bitcoin cannot arrive at an Ethereum address on sandbox.
 
-**If they ask about the Bitcoin, and someone always does:**
-
-> Fair question, and the accurate answer is more interesting than the salesy one. Mesh has a feature
-> called SmartFunding that converts one holding to fund a payment in another. It is in the API and in
-> the docs. So in principle your customer could hold only Bitcoin and still pay you in USDC.
-
-> Two things stop it here. First, it is switched off for this sandbox client, and I tested that
-> rather than assuming it. I connected an account holding five Bitcoin and no stablecoin at all,
-> asked Mesh what could fund a fifty dollar USDC payment, and got an empty list. Asked about a
-> Bitcoin destination in the same minute, it returned the Bitcoin as eligible. Every response carries
-> a field reading `transferBalanceFundingAvailability: disabled`.
-
-> Second, and this one survives the switch being flipped: the customer never picks. There is no field
-> anywhere in Mesh's API for the funding asset, so a merchant cannot offer "pay with Bitcoin" as a
-> choice on a checkout. Mesh decides at payment time, spending the collected asset when the balance
-> covers it and converting something else when it does not. If conversion were enabled here it would
-> simply happen, and the receipt would name it afterwards.
-
-> `MESH-NOTES.md` has the response bodies if you want them.
-
-**Back to the main thread. Select USDC and point at the small grey line that appears under it:
-"Funded from your balance, then from your buying power, then from a payment method on file."**
-
-> That line is Mesh answering a specific question we asked about this specific account: if this
-> customer pays you fifty dollars in USDC, where does the money actually come from? It has given us
-> the order it would try. Balance first. If the balance falls short, buying power. If that falls
-> short, a card they have on file at the exchange.
-
-> The obvious way to build a checkout like this is to read the balance, compare it to the price, and
-> show a tick or a cross. That is wrong three ways over. It misses the exchange's own minimum
-> withdrawal, it misses the fees that come off the top, and it would tell a customer with forty
-> dollars of USDC that they cannot buy this, when Mesh can see they have a card on file and would
-> complete the payment perfectly well.
-
-> So we do not do the arithmetic. We ask Mesh once per asset we accept, and print the answer.
-
-**Point at the struck-through line under Paying from: Copy a wallet address, Withdraw from your
-exchange, Swap or move funds, Work out what we accept.**
-
-> And this is the product. Four things your customer would normally have to do to pay you from an
-> exchange balance, none of which happened. Mesh is not a wallet connect button. It is the layer that
-> makes those four disappear.
+> We collect stablecoins at an address on Ethereum, and Bitcoin cannot arrive at an Ethereum address on this sandbox.
 
 ### 6. Payment trace (1 minute)
 
@@ -305,6 +240,45 @@ next run is a genuine first visit with the sign-in back in it. That is the one t
 show someone new, because the connect step is a third of the story and a warm session hides it.
 
 ---
+
+**If they ask about the Bitcoin, and someone always does:**
+
+> Fair question, and the accurate answer is more interesting than the salesy one. 
+> Mesh has a feature> called SmartFunding that converts one holding to fund a payment in another. 
+> It is in the API and in the docs. 
+> So in principle your customer could hold only Bitcoin and still pay you in USDC.
+
+> From what I could see, conversions are switched off for this sandbox client 
+> I connected an account holding five Bitcoin and no stablecoin at all,
+> asked Mesh what could fund a fifty dollar USDC payment, and got an empty list. 
+> It returned bitcoin as ineligible
+> Every response carries a field reading `transferBalanceFundingAvailability: disabled`.
+
+> `MESH-NOTES.md` has the response bodies if you want them.
+
+**Back to the main thread. Select USDC and point at the small grey line that appears under it:
+"Funded from your balance, then from your buying power, then from a payment method on file."**
+
+> That line is Mesh answering a specific question we asked about this specific account: if this
+> customer pays you fifty dollars in USDC, where does the money actually come from? It has given us
+> the order it would try. Balance first. If the balance falls short, buying power. If that falls
+> short, a card they have on file at the exchange.
+
+> The obvious way to build a checkout like this is to read the balance, compare it to the price, and
+> show a tick or a cross. That is wrong three ways over. It misses the exchange's own minimum
+> withdrawal, it misses the fees that come off the top, and it would tell a customer with forty
+> dollars of USDC that they cannot buy this, when Mesh can see they have a card on file and would
+> complete the payment perfectly well.
+
+> So we do not do the arithmetic. We ask Mesh once per asset we accept, and print the answer.
+
+**Point at the struck-through line under Paying from: Copy a wallet address, Withdraw from your
+exchange, Swap or move funds, Work out what we accept.**
+
+> And this is the product. Four things your customer would normally have to do to pay you from an
+> exchange balance, none of which happened. Mesh is not a wallet connect button. It is the layer that
+> makes those four disappear.
+
 
 ## The questions you will get
 

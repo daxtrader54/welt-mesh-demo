@@ -1537,6 +1537,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                             funding={assetFunding}
                             selected={asset}
                             onSelect={setAsset}
+                            brand={handoffBrand}
                           />
                         )}
 
