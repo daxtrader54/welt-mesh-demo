@@ -68,13 +68,12 @@ About nine minutes without questions.
 **Land on https://welt-mesh-demo.vercel.app.**
 
 > This is WELT. Clearance retailer, one shoe, four colourways, fifty dollars. It is built as an
-> ordinary shop front, and the crypto side is deliberately quiet.
+> ordinary shop front.
 
 **Point at the "Crypto accepted: USDC · USDT · PYUSD" strip.**
 
-> That is the only mention on the whole page, and it names the assets rather than saying "crypto
-> accepted" and leaving it vague. No wallet button, no connect-web3, no mention of Mesh anywhere.
-> Your customers should meet the infrastructure at checkout and nowhere else.
+> There's a mention of the names the assets accepted. But no wallet button, no connect-web3, no mention of Mesh anywhere.
+> The customers should meet the Mesh infrastructure at checkout, experience remains as-is.
 
 **Pick the charcoal colourway, then UK 9.**
 

@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useReducer, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react'
 import Image from 'next/image'
 import type { LinkEventType, LinkPayload, TransferFinishedPayload } from '@meshconnect/web-link-sdk'
 import { failure, type Failure } from '@/lib/failure'
@@ -73,6 +73,16 @@ type Step = 'shop' | 'product' | 'bag' | 'delivery' | 'checkout' | 'done' | 'his
  * nothing and being wrong on stage costs a lot.
  */
 const SETTLEMENT_POLLS = 25
+
+/**
+ * `useLayoutEffect` where there is a layout, `useEffect` where there is not.
+ *
+ * Scroll restoration has to run before the browser paints or you see the page at the top for a
+ * frame and then jump, which looks like a bug rather than a convenience. React logs a warning if
+ * `useLayoutEffect` is called during a server render, and this component is server rendered for
+ * its first HTML, so the two are swapped by environment. Neither effect actually runs on a server.
+ */
+const useIsomorphicLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 
 export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const [step, setStep] = useState<Step>('shop')
@@ -680,6 +690,9 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     setCryptoValue(null)
     setQuotes(null)
     setAsset(null)
+    // A reset starts the demo again, so the listing position from the last run goes with it.
+    listingScroll.current = 0
+    restoreListing.current = false
     window.scrollTo({ top: 0 })
   }, [])
 
@@ -696,16 +709,50 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
     mainRef.current?.focus({ preventScroll: true })
   }, [step])
 
+  /** The current step, readable from callbacks that must not go stale on it. */
+  const stepRef = useRef(step)
+  stepRef.current = step
+  /** Where the listing was when it was last left, and whether the next render should go back. */
+  const listingScroll = useRef(0)
+  const restoreListing = useRef(false)
+
   const goto = useCallback((next: Step) => {
     moved.current = true
+
+    /**
+     * Coming back to the listing puts you back where you were.
+     *
+     * Every other step opens at the top, because it is somewhere new. The listing is not somewhere
+     * new. Scrolling a grid, opening something, and being dumped back at the top of the page is the
+     * oldest annoyance in online shopping, and it was doing it on every route back: the logo, the
+     * bag's back link, and the product page's.
+     *
+     * Restored after the DOM has the listing in it, not here. At this point the page still holds
+     * whatever step is on the way out, which is usually shorter, so the browser would clamp the
+     * offset to that height and land somewhere near the top anyway.
+     */
+    if (stepRef.current === 'shop') listingScroll.current = window.scrollY
+    restoreListing.current = next === 'shop' && listingScroll.current > 0
+
     setStep(next)
     setJustAdded(false)
     // Navigating away unmounts the Link iframe, and nothing else clears this. Left set, every
     // content block on the checkout stays hidden and the column is blank until a page reload.
     setLinkOpen(false)
     setLinkEmbedded(false)
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (!restoreListing.current) window.scrollTo({ top: 0, behavior: 'smooth' })
   }, [])
+
+  /**
+   * `useLayoutEffect` in the browser, so the restore happens before the frame is painted and there
+   * is no visible jump from the top of the page to where the shopper actually was. It falls back to
+   * `useEffect` on the server only to keep React quiet: neither runs there.
+   */
+  useIsomorphicLayoutEffect(() => {
+    if (!restoreListing.current) return
+    restoreListing.current = false
+    window.scrollTo({ top: listingScroll.current })
+  }, [step])
 
   /**
    * The bag survives a refresh and dies with the tab. sessionStorage rather than localStorage on
