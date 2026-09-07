@@ -68,18 +68,17 @@ About nine minutes without questions.
 **Land on https://welt-mesh-demo.vercel.app.**
 
 > This is WELT. 
-> A clearance retailer, 
+> A pretend clearance retailer
 > one shoe, four colours, fifty dollars. 
 > It is built as an ordinary shop front.
 
 **Point at the "Crypto accepted: USDC · USDT · PYUSD" strip.**
 
-> Shop accepts crypto. 
-> Names the assets accepted. 
-> No wallet button, no connect-web3, 
-> No mention of Mesh.
-> The customers will meet Mesh at the checkout, 
+> At this stage, there is no mention of Mesh.
+> But the shop accepts crypto. 
+> With no sign in with wallet button, no connect-web3 ux
 > The shop experience remains normal.
+> The customers will meet Mesh at the checkout
 
 **Take a look around**
 
@@ -114,31 +113,29 @@ About nine minutes without questions.
 
 **Point at the crypto button. It reads "Choose your exchange or wallet".**
 
-> It does not name an exchange, because at this point nothing has been chosen. Where your money is
-> held is the one decision in this checkout that is genuinely the customer's, and a merchant's page
-> should not be answering it for them.
+> We do not name an exchange, because nothing has been chosen yet. 
+> Where your money is held is the one decision that is genuinely the customer's, 
+> and a merchant's page should not be answering it for a first-time user.
 
 **Point at the sentence under it: "Coinbase and Binance can fund this payment in USDC on Ethereum.
 Kraken, Robinhood, CashApp and Uphold can too, on a live account."**
 
-> That sentence is generated, not written. Mesh publishes a list of every exchange and wallet it
-> integrates with, and which assets and networks each one can send. We ask it who can send USDC on
-> Ethereum to our address, and print the answer.
-
-> It splits in two on purpose. The first group can do it here, today, in the sandbox. The second
-> could do it on a live account. If Kraken dropped USDC on Ethereum tomorrow, this sentence would
-> change on its own and nobody would have to remember to edit it.
+> That sentence is generated, not written. 
+> Mesh publishes a list of every exchange and wallet it integrates with, 
+> and which assets and networks each one can send. 
+> The app asks who can send USDC on Ethereum to our address, and then prints the answer.
 
 ### 4. Connect (1 minute)
 
 **Press the button. Mesh Link opens on the full picker.**
 
-> This is Mesh Link and I have built none of it. One script tag, plus a token my server mints for
-> the session.
+> This is Mesh Link and I have built none of it. 
+> To integrate it was one script tag, 
+> plus a token my server mints for the session.
 
-> And this list is the argument, which is why the button did not just say Coinbase. Every exchange
-> and wallet on it is already integrated. Adding Kraken is not a project with a timeline, it is the
-> customer tapping Kraken.
+> The list your customer is looking at now is the same one that generated that sentence. 
+> Everything on it is already integrated. 
+> Adding Kraken is not a project with a timeline, it is a customer tapping Kraken.
 
 **Pick Coinbase.**
 
@@ -314,6 +311,43 @@ eligible. Every response carries `transferBalanceFundingAvailability: disabled`.
 
 Say that plainly rather than talking around it. "We tested it, here is the response body, here is the
 question we have put to Mesh" is a better answer than a hedge. `MESH-NOTES.md` has the full run.
+
+**"Why can't I pay with MetaMask?"**
+
+In the sandbox, because the chains do not meet. In production it works fine, and that distinction is
+the whole answer.
+
+Our address is on Ethereum, chainId 1. Here is what each integration can actually reach, live from
+Mesh:
+
+```
+MetaMask   Sepolia (11155111), Base Sepolia (84532)
+Phantom    Sepolia, Base Sepolia, Solana Devnet
+Rainbow    Sepolia
+Coinbase   Ethereum (1), Polygon, Solana, Base, Bitcoin, + 12 more
+Binance    Ethereum (1), BSC, Solana, + 19 more
+```
+
+The wallets have no route to chainId 1. Not a policy, the sets do not intersect. Those testnets do
+carry USDC, but Sepolia USDC is a different contract on a different chain and cannot arrive at a
+mainnet address.
+
+The reason behind it is worth giving, because it is the part a merchant will not have thought about.
+Coinbase and Binance "sandbox" are simulated exchanges: Mesh runs a fake exchange with fake balances
+and a fake login, and because the whole thing is fiction it can pretend to sit on mainnet and hand
+you a mainnet transfer that never happened. That is why our transaction hashes exist on no public
+chain.
+
+MetaMask cannot be faked. It is a real wallet holding real keys, and Mesh cannot invent a balance or
+produce a mainnet transaction from it without a signature that would move real money. So the only
+honest sandbox for a self-custody wallet is a real testnet: real chain, real signature, worthless
+money.
+
+Custodial sandbox is a fake exchange pretending to be on mainnet. Self-custody sandbox is a real
+wallet on a real chain with play money. Nothing bridges those two, which is why a demo can show one
+or the other and never both in the same payment. On a live account MetaMask holding mainnet USDC
+pays a mainnet USDC address perfectly well, and Mesh already lists it as supporting outgoing
+transfers.
 
 **"What does it cost the merchant?"**
 
