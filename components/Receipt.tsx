@@ -84,9 +84,39 @@ export function Receipt({
         : [])
   ]
 
+  /**
+   * The arithmetic, and it has to close.
+   *
+   * The withdrawal fee was listed in the summary above and then left out of here, so the details
+   * read "50 sent, 0 network fee, Mesh reported total $50.00" directly underneath a summary
+   * charging $50.01. The one number that explains the difference was the one number missing, and
+   * a reader is left deciding which half of their own receipt to believe. Raised more than once,
+   * which is what a receipt that contradicts itself earns.
+   *
+   * So the fee gets a row and the section ends on the figure the account was actually debited.
+   * Amount, network fee, withdrawal fee, total. Then Mesh's own number underneath when it differs,
+   * which is a statement about Mesh rather than a step in the sum.
+   */
   const detail: { label: string; value: string }[] = [
     { label: 'Amount sent', value: token(p.amount, p.symbol) },
     { label: 'Network fee', value: token(order.fees.gas ?? 0, p.symbol) },
+    ...(order.fees.institution
+      ? [
+          {
+            label: 'Exchange withdrawal fee',
+            value: token(order.fees.institution, order.fees.institutionCurrency ?? p.symbol)
+          }
+        ]
+      : []),
+    ...(order.fees.client
+      ? [{ label: 'Handling fee', value: token(order.fees.client, p.symbol) }]
+      : []),
+    /**
+     * Only when the fees are quoted in the token that was sent. Mesh gives the institution fee its
+     * own currency, and a total summing two currencies under one symbol would be a worse problem
+     * than the one this row exists to fix.
+     */
+    ...(tokenTotal ? [{ label: 'Total debited', value: tokenTotal }] : []),
     // Only worth a row when it contradicts the arithmetic above it, which it sometimes does.
     ...(meshDisagrees
       ? [{ label: 'Mesh reported total', value: usd(p.totalAmountInFiat) }]
