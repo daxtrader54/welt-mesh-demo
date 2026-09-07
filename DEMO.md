@@ -112,28 +112,35 @@ About nine minutes without questions.
 > Crypto only. 
 > Everything from here is a real call against Mesh's sandbox.
 
-**Point at the crypto button.**
+**Point at the crypto button. It reads "Choose your exchange or wallet".**
 
-> The "Continue with coinbase" button styling is not hardcoded. 
-> Mesh publishes a brand palette and a logo set for every integration it supports, light and dark, and the page reads it live.
-> If we change this and connect a Binance account the button turns Binance yellow. 
-> But for now we can do coinbase.
+> It does not name an exchange, because at this point nothing has been chosen. Where your money is
+> held is the one decision in this checkout that is genuinely the customer's, and a merchant's page
+> should not be answering it for them.
 
-**Point at the sentence under the button. It reads something like "Coinbase and Binance can fund this payment in USDC on  ethereum. Kraken, Robinhood, CashApp and Uphold can too, on a live account."**
+**Point at the sentence under it: "Coinbase and Binance can fund this payment in USDC on Ethereum.
+Kraken, Robinhood, CashApp and Uphold can too, on a live account."**
 
-> If we look at the sentence under the button, that sentence is generated, not written. 
-> Mesh publishes a list of every exchange and wallet it integrates with, and which assets and networks each one can send. 
-> We ask it who can send USDC on Ethereum to our address, and print the answer.
+> That sentence is generated, not written. Mesh publishes a list of every exchange and wallet it
+> integrates with, and which assets and networks each one can send. We ask it who can send USDC on
+> Ethereum to our address, and print the answer.
 
-> Let's click it. Mesh starts to authenticate. Username and password. 2FA. Authorize. Connected!
+> It splits in two on purpose. The first group can do it here, today, in the sandbox. The second
+> could do it on a live account. If Kraken dropped USDC on Ethereum tomorrow, this sentence would
+> change on its own and nobody would have to remember to edit it.
 
 ### 4. Connect (1 minute)
 
-**Press the button. Mesh Link opens.**
+**Press the button. Mesh Link opens on the full picker.**
 
 > This is Mesh Link and I have built none of it. One script tag, plus a token my server mints for
-> the session. The same component handles every exchange and wallet in that list, so adding Kraken
-> is not an integration, it is already here.
+> the session.
+
+> And this list is the argument, which is why the button did not just say Coinbase. Every exchange
+> and wallet on it is already integrated. Adding Kraken is not a project with a timeline, it is the
+> customer tapping Kraken.
+
+**Pick Coinbase.**
 
 **Log in as `Mesh`, password `Pass123`, code `123456`.**
 
@@ -141,6 +148,14 @@ About nine minutes without questions.
 
 > That login form is served by Mesh, not by Coinbase. 
 > Never type real exchange credentials into a sandbox.
+
+**Once it closes, point at the button again. It now reads "Continue with Coinbase", in Coinbase
+blue, with the Coinbase mark.**
+
+> None of that is hardcoded. Mesh publishes a brand palette and a logo set for every integration it
+> supports, light and dark, and the page reads it live. Had they picked Binance, that button would
+> be Binance yellow. So the checkout now matches the account behind it, and if they come back to
+> pay, the button they press looks like the screen it opens.
 
 ### 5. The portfolio (2 minutes, and it is not about payments)
 

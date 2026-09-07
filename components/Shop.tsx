@@ -135,17 +135,11 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * The provider the checkout opens Link on by default, from the live catalogue. Never hardcoded:
    * the server picks the top usable entry and this just carries it.
    */
-  const [suggested, setSuggested] = useState<{
-    id: string
-    name: string
-    brand: BrokerBrand | null
-  } | null>(null)
   /**
    * Every integration's own colours, keyed by broker type, straight from Mesh's catalogue.
    *
-   * Kept separately from `suggested` because the shopper may already be connected to something
-   * other than the provider we would have suggested, and the button should wear the colours of
-   * the account they are actually going to.
+   * Keyed rather than held as one value because the button wears the colours of the account the
+   * shopper actually connected, and that is not known until they have chosen one.
    */
   const [brands, setBrands] = useState<Record<string, BrokerBrand>>({})
   const [hasConnection, setHasConnection] = useState(false)
@@ -196,8 +190,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
    * one we would open for them. Null when Mesh published no palette for either, which is the case
    * for plenty of the catalogue and has to look deliberate rather than half-applied.
    */
-  const handoffBrand: BrokerBrand | null =
-    (connection ? brands[connection.brokerType] : null) ?? suggested?.brand ?? null
+  const handoffBrand: BrokerBrand | null = connection ? (brands[connection.brokerType] ?? null) : null
 
   const payingWith = asset ?? PRODUCT.settlement.symbol
   const activeFunding: Funding | null = funding && {
@@ -552,19 +545,27 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       }
       dispatch({ type: 'connect:started', at: Date.now() })
       /**
-       * Deep-linked to the suggested provider unless the shopper asked for the full catalogue.
-       * Mesh's picker is the breadth argument and it stays one click away, but it is the wrong
-       * default: a shopper who does not own crypto reads a list of self-custody wallets as a
-       * question they cannot answer, and a tester did.
+       * The first connect opens Mesh's picker. Every one after it is deep-linked.
+       *
+       * This used to deep-link the first one too, straight to whichever provider the catalogue
+       * ranked highest, on the reasoning that a shopper who owns no crypto reads a list of
+       * self-custody wallets as a question they cannot answer. A tester did exactly that, so the
+       * reasoning was sound. The fix for it was wrong.
+       *
+       * Choosing where your money is held is the one decision in this checkout that is genuinely
+       * the customer's, and it cannot be answered on their behalf. Deep-linking made a merchant's
+       * page assert that everyone banks at Coinbase, and it hid the argument the integration
+       * exists to make: that it is every exchange and wallet Mesh supports, not one. The tester's
+       * confusion is better answered by the sentence under the button, which names who can
+       * actually fund this payment, than by removing the choice.
+       *
+       * Once connected there is nothing left to pick, so the picker does not come back. `fresh` on
+       * a forced connect: they asked for a different account, so do not hand Link the one they
+       * already have.
        */
-      // `fresh` on a forced connect: they asked for a different account, so do not hand Link the
-      // one they already have.
-      void open(
-        'connect',
-        force ? { fresh: true } : suggested ? { integrationId: suggested.id } : undefined
-      )
+      void open('connect', force ? { fresh: true } : undefined)
     },
-    [open, connection, readPortfolio, suggested]
+    [open, connection, readPortfolio]
   )
 
   const startPayment = useCallback(
@@ -961,8 +962,12 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   }, [step])
 
   /**
-   * Who to open Link on. Fetched once, in the background, well before anyone clicks: resolving it
-   * on the click would put a catalogue call between the button and the overlay.
+   * Each integration's colours, fetched once in the background well before anyone clicks. Resolving
+   * it on the click would put a catalogue call between the button and the overlay.
+   *
+   * The route also returns `suggested`, the provider this merchant would rank first. Nothing reads
+   * it any more: the first connect opens Mesh's picker rather than deep-linking, so there is no
+   * default to resolve. The ranking still sorts the list the panel shows.
    */
   useEffect(() => {
     let cancelled = false
@@ -970,7 +975,6 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
       .then(r => r.json())
       .then(j => {
         if (cancelled) return
-        if (j.suggested) setSuggested(j.suggested)
         if (j.brands) setBrands(j.brands)
       })
       .catch(() => {})
@@ -1450,27 +1454,37 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
                                   unoptimized
                                 />
                               )}
+                              {/*
+                                Named only once there is an account to name. It used to read
+                                "Continue with Coinbase" before anything was connected, while
+                                opening a picker of every exchange and wallet Mesh supports, which
+                                is a button describing a screen other than the one it opens.
+                              */}
                               {busy
                                 ? 'Opening…'
                                 : connection
                                   ? `Continue with ${connection.brokerName}`
-                                  : suggested
-                                    ? `Continue with ${suggested.name}`
-                                    : 'Continue with crypto'}
+                                  : 'Choose your exchange or wallet'}
                             </button>
-                            <p className="note mt-2">
-                              {connection
-                                ? 'Already connected, so there is no sign-in this time. '
-                                : null}
-                              <button
-                                type="button"
-                                onClick={() => startConnect(true)}
-                                className="underline underline-offset-2 hover:text-ink"
-                              >
-                                {connection ? 'Use a different account' : 'Use a different exchange or wallet'}
-                              </button>
-                              .
-                            </p>
+                            {/*
+                              The escape hatch only exists once there is something to escape from.
+                              Before connecting, the picker is already where this button goes, so
+                              offering "use a different exchange" underneath it was offering the
+                              thing the shopper was about to get anyway.
+                            */}
+                            {connection && (
+                              <p className="note mt-2">
+                                Already connected, so there is no sign-in this time.{' '}
+                                <button
+                                  type="button"
+                                  onClick={() => startConnect(true)}
+                                  className="underline underline-offset-2 hover:text-ink"
+                                >
+                                  Use a different account
+                                </button>
+                                .
+                              </p>
+                            )}
                             <div className="mt-3">
                               <FundingNote />
                             </div>
