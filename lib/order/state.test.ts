@@ -201,7 +201,7 @@ describe('failure states', () => {
     s = reduceOrder(s, {
       type: 'holdings:failed',
       at: T,
-      failure: { code: 'portfolio_failed', title: 'x', retryable: true }
+      failure: { code: 'portfolio_failed', title: 'x', retryable: true, source: 'mesh' }
     })
     expect(s.status).not.toBe('failed')
     expect(step(s, 'holdings').state).toBe('failed')

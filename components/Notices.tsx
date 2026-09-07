@@ -9,15 +9,33 @@ import { BRAND } from '@/lib/product'
  * The shopper reads a plain sentence and gets one action. The real message and the Mesh
  * reference are kept for the technical view, where someone can do something with them.
  */
+/**
+ * Where a failure came from, in the fewest words that are still true.
+ *
+ * Anyone reviewing a demo on their own hits a tidy failure screen and immediately wonders whether
+ * it was staged, and there is nothing on the screen to answer them. This does: it names the state
+ * and says who produced it, and for anything Mesh reported it points at the event log where the
+ * thing that fired is sitting unedited.
+ */
+const SOURCE_COPY: Record<Failure['source'], string> = {
+  mesh: 'Reported by Mesh',
+  you: 'You closed or declined it',
+  app: 'From this app',
+  network: 'Neither of us. The request did not complete'
+}
+
 export function FailureNotice({
   failure,
   onRetry,
   onDismiss,
+  onInspect,
   dismissLabel = 'Back to the shop'
 }: {
   failure: Failure
   onRetry?: () => void
   onDismiss?: () => void
+  /** Opens the technical panel, which lands on the event log. */
+  onInspect?: () => void
   dismissLabel?: string
 }) {
   return (
@@ -42,8 +60,26 @@ export function FailureNotice({
         )}
       </div>
 
+      <p className="note mt-4">
+        <span className="data">{failure.code}</span>
+        {' · '}
+        {SOURCE_COPY[failure.source]}
+        {failure.source === 'mesh' && onInspect && (
+          <>
+            {'. '}
+            <button
+              type="button"
+              onClick={onInspect}
+              className="underline underline-offset-2 hover:text-ink"
+            >
+              See what fired
+            </button>
+          </>
+        )}
+      </p>
+
       {(failure.detail || failure.reference) && (
-        <p className="note mt-4">
+        <p className="note mt-1.5">
           {failure.detail}
           {failure.reference ? ` · ref ${failure.reference}` : ''}
         </p>

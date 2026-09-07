@@ -747,6 +747,19 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
   const listingScroll = useRef(0)
   const restoreListing = useRef(false)
 
+  /**
+   * Open the technical panel on the event log.
+   *
+   * Both instances, because the docked one and the sheet are separate components and CSS decides
+   * which is on screen. Setting one leaves the other width showing nothing, which reads as a dead
+   * link. The panel opens on the events tab by default, which is exactly where a failure notice is
+   * sending someone.
+   */
+  const inspectEvents = useCallback(() => {
+    setPanelOpen(true)
+    setDrawer(true)
+  }, [])
+
   const goto = useCallback((next: Step) => {
     moved.current = true
 
@@ -1375,6 +1388,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
                     {order.failure && !linkOpen && (
                       <FailureNotice
+                        onInspect={inspectEvents}
                         failure={order.failure}
                         /**
                          * `force` drops the stored account and opens Mesh's full catalogue, which
@@ -1519,6 +1533,7 @@ export function Shop({ panelOpenByDefault }: { panelOpenByDefault: boolean }) {
 
                     {order.warning && !order.failure && !linkOpen && (
                       <FailureNotice
+                        onInspect={inspectEvents}
                         failure={order.warning}
                         onDismiss={() => dispatch({ type: 'clear:failure' })}
                         dismissLabel="Continue anyway"

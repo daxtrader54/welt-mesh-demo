@@ -172,19 +172,15 @@ blue, with the Coinbase mark.**
 > Second Link session, opening straight on the account the user already connected.
 > No second picker, because being asked to choose your exchange twice in one checkout is confusing.
 
-**MFA `123456`. Approve. Watch the trace fill in.**
-
-> Preview. Initiated. Executed. Real events.
 
 **The receipt prints and the product picture takes a YOURS stamp.**
 
 > Fifty dollars in USDC, on Ethereum, from Coinbase, to our address.
+> MFA
+> The next part shows the difference between a demo and a payment system.
+> Click Verify
 
 ### 8. Paid is not settled (1 minute)
-
-**Point at the status on the receipt. It says Paid.**
-
-> This part shows the difference between a demo and a payment system.
 
 > It says paid, not settled.
 > What happened is that the customer's browser told us the exchange acknowledged the withdrawal.

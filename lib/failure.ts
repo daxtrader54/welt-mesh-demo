@@ -39,42 +39,61 @@ export type Failure = {
   reference?: string
   /** Whether offering a retry is honest. A used link token is not retryable, a timeout is. */
   retryable: boolean
+  /**
+   * Who produced this state. Shown on the notice, because the first thing anyone reviewing a demo
+   * wonders about a tidy failure screen is whether it was staged.
+   *
+   * `mesh` is Mesh refusing or reporting something, and the Events tab will have the event that
+   * carried it. `you` is the shopper's own action, closing Link or declining access. `app` is our
+   * own code or configuration. `network` is neither of us.
+   */
+  source: 'mesh' | 'app' | 'you' | 'network'
 }
 
-const COPY: Record<FailureCode, { title: string; hint?: string; retryable: boolean }> = {
+const COPY: Record<
+  FailureCode,
+  { title: string; hint?: string; retryable: boolean; source: Failure['source'] }
+> = {
   config: {
     title: 'This store is not configured yet',
     hint: 'The Mesh credentials are missing on the server.',
-    retryable: false
+    retryable: false,
+    source: 'app'
   },
   link_token: {
     title: 'We could not start the payment',
     hint: 'Mesh did not issue a session. Try again in a moment.',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   sdk_load: {
     title: 'The payment window would not open',
     hint: 'Check that nothing is blocking pop-ups or frames, then try again.',
-    retryable: true
+    retryable: true,
+    source: 'app'
   },
   connect_failed: {
     title: 'Coinbase could not be connected',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   connect_declined: {
     title: 'The connection was turned down',
     hint: 'You need to approve access before you can pay from your account.',
-    retryable: true
+    retryable: true,
+    source: 'you'
   },
   connect_unavailable: {
     title: 'That account is not available on this device',
     hint: 'Pick a different account to pay from.',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   portfolio_failed: {
     title: 'We connected, but could not read your balances',
     hint: 'You can still pay. We just cannot show your holdings first.',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   /**
    * Distinct from `portfolio_failed` because the cure is different and so is the honest copy.
@@ -85,22 +104,26 @@ const COPY: Record<FailureCode, { title: string; hint?: string; retryable: boole
   connection_expired: {
     title: 'Your account connection has expired',
     hint: 'Connect again to see your balances and pay.',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   no_eligible_assets: {
     title: 'Nothing in that account can cover this',
     hint: 'This order settles in USDC on Ethereum. Try another account.',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   preview_failed: {
     title: 'We could not price the payment',
     hint: 'Mesh could not build a transfer preview. Try again.',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   execution_failed: {
     title: 'The payment did not go through',
     hint: 'Nothing has been taken. You can try again.',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   /**
    * Authorised, not finished, and emphatically not retryable.
@@ -113,40 +136,48 @@ const COPY: Record<FailureCode, { title: string; hint?: string; retryable: boole
   transfer_pending: {
     title: 'Your payment is still being confirmed',
     hint: 'Your account has authorised it and the exchange has not finished. Nothing else is needed from you.',
-    retryable: false
+    retryable: false,
+    source: 'mesh'
   },
   transfer_declined: {
     title: 'The payment was declined',
-    retryable: true
+    retryable: true,
+    source: 'mesh'
   },
   session_expired: {
     title: 'That payment session expired',
     hint: 'Sessions last ten minutes. Start it again.',
-    retryable: true
+    retryable: true,
+    source: 'app'
   },
   abandoned: {
     title: 'Payment cancelled',
     hint: 'Nothing has been taken.',
-    retryable: true
+    retryable: true,
+    source: 'you'
   },
   timeout: {
     title: 'Mesh took too long to answer',
     hint: 'Try again.',
-    retryable: true
+    retryable: true,
+    source: 'network'
   },
   network: {
     title: 'We could not reach Mesh',
     hint: 'Check your connection and try again.',
-    retryable: true
+    retryable: true,
+    source: 'network'
   },
   rate_limited: {
     title: 'Too many attempts',
     hint: 'Wait a few seconds before trying again.',
-    retryable: false
+    retryable: false,
+    source: 'mesh'
   },
   unknown: {
     title: 'The payment stopped unexpectedly',
-    retryable: true
+    retryable: true,
+    source: 'app'
   }
 }
 
@@ -161,6 +192,7 @@ export function failure(
     hint: extra?.hint ?? base.hint,
     detail: extra?.detail,
     reference: extra?.reference,
-    retryable: base.retryable
+    retryable: base.retryable,
+    source: base.source
   }
 }
